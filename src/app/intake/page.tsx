@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { saveBid, BidItem } from "../bids";
 
 export default function IntakePage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     title: "",
     agency: "",
@@ -13,7 +16,21 @@ export default function IntakePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert(`RFP "${formData.title}" submitted to pipeline!`);
+    
+    const randomScore = Math.floor(Math.random() * (95 - 75 + 1)) + 75;
+    const newBid: BidItem = {
+      id: `BID-${Math.floor(100 + Math.random() * 900)}`,
+      title: formData.title,
+      agency: formData.agency,
+      dueDate: formData.dueDate,
+      status: "Drafting",
+      fitScore: randomScore,
+      estimatedValue: formData.estimatedValue,
+      scope: formData.scope,
+    };
+
+    saveBid(newBid);
+    router.push("/admin");
   };
 
   return (
@@ -22,7 +39,7 @@ export default function IntakePage() {
         <div className="flex justify-between items-center border-b border-slate-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-emerald-400">RFP Document Intake</h1>
-            <p className="text-sm text-slate-400">Log procurement solicitations and institutional opportunities.</p>
+            <p className="text-sm text-slate-400">Log procurement solicitations and sync directly to the operations queue.</p>
           </div>
           <a href="/admin" className="text-sm text-slate-400 hover:text-slate-200">
             ← Back to Admin
@@ -38,7 +55,7 @@ export default function IntakePage() {
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500"
-              placeholder="e.g., Commercial Janitorial & Sanitization Services"
+              placeholder="e.g., Municipal Custodial & Janitorial Services"
             />
           </div>
 
@@ -78,13 +95,13 @@ export default function IntakePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Scope Summary / Key Deliverables</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Scope Summary / Deliverables</label>
             <textarea
               rows={4}
               value={formData.scope}
               onChange={(e) => setFormData({ ...formData, scope: e.target.value })}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-100 focus:outline-none focus:border-emerald-500"
-              placeholder="Enter key compliance items, square footage, staffing requirements..."
+              placeholder="Enter facility square footage, staffing levels, special certifications..."
             />
           </div>
 
@@ -92,7 +109,7 @@ export default function IntakePage() {
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition"
           >
-            Save & Send to Fit-Scorer
+            Save & Add to Pipeline Queue →
           </button>
         </form>
       </div>
