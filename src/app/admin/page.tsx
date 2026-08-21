@@ -237,12 +237,13 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* Drawer Action Bar */}
               <div className="pt-6 border-t border-slate-800 flex gap-3">
                 <Link
-                  href="/fit-score"
+                  href={`/fit-score?bidId=${selectedBid.id}`}
                   className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-center py-2.5 rounded-lg text-sm font-medium transition border border-slate-700"
                 >
-                  Run Fit Matrix
+                  Run Fit Matrix →
                 </Link>
                 <button
                   onClick={() => setSelectedBid(null)}
