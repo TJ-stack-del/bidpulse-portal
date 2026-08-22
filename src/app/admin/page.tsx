@@ -151,29 +151,65 @@ Generated via BidPulse Procurement Intelligence Engine
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handlePrint = () => {
+const handlePrint = () => {
     if (!selectedBid) return;
+
     const content = generateScaffolding(selectedBid);
-    const printWindow = window.open("", "_blank", "width=800,height=900");
-    if (printWindow) {
-      printWindow.document.write(`
+
+    // Remove any existing print iframe
+    const existingFrame = document.getElementById("print-iframe");
+    if (existingFrame) existingFrame.remove();
+
+    // Create a hidden iframe
+    const iframe = document.createElement("iframe");
+    iframe.id = "print-iframe";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(`
         <!DOCTYPE html>
         <html>
           <head>
             <title>${selectedBid.id} - Proposal Scaffolding</title>
             <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 30px; color: #111827; line-height: 1.5; }
-              pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
-              @media print { body { padding: 0; } }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+                padding: 24px;
+                color: #111827;
+                background: #ffffff;
+                line-height: 1.5;
+              }
+              pre {
+                white-space: pre-wrap;
+                word-break: break-word;
+                font-size: 12px;
+                font-family: monospace;
+              }
+              @media print {
+                body { padding: 0; }
+              }
             </style>
           </head>
           <body>
             <pre>${content}</pre>
-            <script>window.onload = function() { window.print(); };</script>
           </body>
         </html>
       `);
-      printWindow.document.close();
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      }, 250);
     }
   };
 
