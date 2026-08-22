@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 export interface ScoringBreakdown {
   certifications: number;
   pastPerformance: number;
@@ -113,6 +115,18 @@ export function saveNewBid(newBid: BidItem) {
   if (typeof window !== "undefined") {
     localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
   }
+
+  supabase.from("bids").insert({
+    id: newBid.id,
+    title: newBid.title,
+    agency: newBid.agency,
+    due_date: newBid.dueDate,
+    status: newBid.status,
+    fit_score: newBid.fitScore,
+    estimated_value: newBid.estimatedValue,
+    scope: newBid.scope,
+    scoring_breakdown: newBid.scoringBreakdown
+  }).then();
 }
 
 export const saveBid = saveNewBid;
@@ -123,15 +137,27 @@ export function updateBidDetails(id: string, updates: Partial<BidItem>) {
   if (typeof window !== "undefined") {
     localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
   }
+
+  const payload: Record<string, unknown> = {};
+  if (updates.status) payload.status = updates.status;
+  if (updates.fitScore) payload.fit_score = updates.fitScore;
+  if (updates.estimatedValue) payload.estimated_value = updates.estimatedValue;
+  if (updates.scope) payload.scope = updates.scope;
+  if (updates.scoringBreakdown) payload.scoring_breakdown = updates.scoringBreakdown;
+
+  supabase.from("bids").update(payload).eq("id", id).then();
+}
+
+export function updateBidScore(id: string, fitScore: number, scoringBreakdown?: ScoringBreakdown) {
+  updateBidDetails(id, { fitScore, scoringBreakdown });
 }
 
 export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id" | "createdAt">) {
+  const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
+  const createdAt = new Date().toLocaleString();
+  const newTicket: SupportTicket = { ...ticket, id: ticketId, createdAt };
+
   const current = getSavedBids();
-  const newTicket: SupportTicket = {
-    ...ticket,
-    id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-    createdAt: new Date().toLocaleString()
-  };
   const updated = current.map((bid) => {
     if (bid.id === bidId) {
       const existing = bid.tickets || [];
@@ -139,9 +165,18 @@ export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id"
     }
     return bid;
   });
+
   if (typeof window !== "undefined") {
     localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
   }
+
+  supabase.from("support_tickets").insert({
+    id: ticketId,
+    bid_id: bidId,
+    type: ticket.type,
+    message: ticket.message,
+    created_at: createdAt
+  }).then();
 }
 
 export function purgeAllTestData() {
@@ -149,6 +184,8 @@ export function purgeAllTestData() {
     localStorage.setItem("bidpulse_bids", JSON.stringify([]));
     localStorage.removeItem("bidpulse_intake_draft");
   }
+  supabase.from("support_tickets").delete().neq("id", "none").then();
+  supabase.from("bids").delete().neq("id", "none").then();
 }
 
 export function resetToSampleData() {
@@ -157,7 +194,6 @@ export function resetToSampleData() {
   }
 }
 
-// Intake Auto-save Utilities
 export function getSavedDraft(): IntakeDraft | null {
   if (typeof window === "undefined") return null;
   const stored = localStorage.getItem("bidpulse_intake_draft");
