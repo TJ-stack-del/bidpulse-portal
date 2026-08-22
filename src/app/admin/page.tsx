@@ -486,7 +486,7 @@ SEALED AND PREPARED FOR SUBMISSION
                     }}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition cursor-pointer"
                   >
-                    📥 Export Complete SOW Document (.txt)
+                    <Link href={`/admin/proposal/${selectedBid.id}`} target="_blank" className="w-full bg-slate-950 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition text-center block mb-2">📄 Open Formal PDF / Print View →</Link>📥 Export SOW Text File (.txt)
                   </button>
                 </div>
               )}
