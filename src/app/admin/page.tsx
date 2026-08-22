@@ -5,6 +5,10 @@ import Link from "next/link";
 import { getSavedBids, BidItem } from "../bids";
 
 export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
+
   const [bids, setBids] = useState<BidItem[]>([]);
   const [selectedBid, setSelectedBid] = useState<BidItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -19,8 +23,31 @@ export default function AdminPage() {
   const [marginPct, setMarginPct] = useState<number>(15);
 
   useEffect(() => {
+    const authStatus = sessionStorage.getItem("bidpulse_admin_auth");
+    if (authStatus === "granted") {
+      setIsAuthenticated(true);
+    }
     setBids(getSavedBids());
   }, []);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctPin = process.env.NEXT_PUBLIC_ADMIN_PIN || "1234";
+    if (pinInput === correctPin) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem("bidpulse_admin_auth", "granted");
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setPinInput("");
+    }
+  };
+
+  const handleLockSession = () => {
+    sessionStorage.removeItem("bidpulse_admin_auth");
+    setIsAuthenticated(false);
+    setPinInput("");
+  };
 
   const handleStatusChange = (bidId: string, newStatus: BidItem["status"]) => {
     const updated = bids.map((b) => (b.id === bidId ? { ...b, status: newStatus } : b));
@@ -39,7 +66,6 @@ export default function AdminPage() {
     }
   };
 
-  // Compute Agency Concentration Breakdown
   const agencyCounts = bids.reduce((acc, bid) => {
     acc[bid.agency] = (acc[bid.agency] || 0) + 1;
     return acc;
@@ -50,7 +76,6 @@ export default function AdminPage() {
     return acc + num;
   }, 0);
 
-  // Financial Calculations for Selected Bid
   const targetValNum = selectedBid
     ? parseInt((selectedBid.estimatedValue || "").replace(/[^0-9]/g, ""), 10) || 0
     : 0;
@@ -191,6 +216,61 @@ Generated via BidPulse Procurement Intelligence Engine
     return matchesSearch && matchesStatus && matchesAgency;
   });
 
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-sm w-full space-y-5 shadow-2xl">
+          <div className="text-center space-y-2">
+            <div className="h-10 w-10 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded-xl flex items-center justify-center mx-auto text-lg font-bold">
+              🔒
+            </div>
+            <h1 className="text-xl font-bold text-slate-100">Admin Security Gate</h1>
+            <p className="text-xs text-slate-400">
+              Enter authorized PIN to unlock pipeline controls and margin calculators.
+            </p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <div>
+              <input
+                type="password"
+                maxLength={8}
+                value={pinInput}
+                onChange={(e) => {
+                  setPinInput(e.target.value);
+                  setPinError(false);
+                }}
+                placeholder="Enter PIN (Default: 1234)"
+                className={`w-full bg-slate-950 border rounded-xl p-3 text-center text-lg tracking-widest text-slate-100 placeholder-slate-600 focus:outline-none ${
+                  pinError ? "border-rose-500 focus:border-rose-500" : "border-slate-800 focus:border-emerald-500"
+                }`}
+                autoFocus
+              />
+              {pinError && (
+                <div className="text-[11px] text-rose-400 text-center font-medium mt-1.5">
+                  Invalid authorization code. Try default `1234`.
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm cursor-pointer shadow-md"
+            >
+              Unlock Dashboard →
+            </button>
+          </form>
+
+          <div className="text-center pt-2 border-t border-slate-800/80">
+            <Link href="/" className="text-xs text-slate-500 hover:text-slate-300 transition">
+              ← Return to Mission Control
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8 relative">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -225,6 +305,14 @@ Generated via BidPulse Procurement Intelligence Engine
             >
               Fit Scorer
             </Link>
+            <button
+              type="button"
+              onClick={handleLockSession}
+              title="Lock Admin Session"
+              className="bg-slate-900 hover:bg-rose-950 text-slate-400 hover:text-rose-300 font-medium p-2.5 rounded-lg text-sm transition border border-slate-800 hover:border-rose-800/60 cursor-pointer"
+            >
+              🔒 Lock
+            </button>
           </div>
         </header>
 
@@ -523,7 +611,6 @@ Generated via BidPulse Procurement Intelligence Engine
                   </div>
                 </div>
 
-                {/* Interactive Sliders */}
                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
                   <div>
                     <div className="flex justify-between text-xs font-semibold mb-1">
