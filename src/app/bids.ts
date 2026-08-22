@@ -91,14 +91,14 @@ export const initialBids: BidItem[] = [
 export function getSavedBids(): BidItem[] {
   if (typeof window === "undefined") return initialBids;
   const stored = localStorage.getItem("bidpulse_bids");
-  if (!stored) {
+  if (stored === null) {
     localStorage.setItem("bidpulse_bids", JSON.stringify(initialBids));
     return initialBids;
   }
   try {
     return JSON.parse(stored);
   } catch (e) {
-    return initialBids;
+    return [];
   }
 }
 
@@ -116,22 +116,6 @@ export function saveNewBid(newBid: BidItem) {
 }
 
 export const saveBid = saveNewBid;
-
-export function updateBidScore(id: string, newScore: number, breakdown?: ScoringBreakdown) {
-  const current = getSavedBids();
-  const updated = current.map((bid) =>
-    bid.id === id
-      ? {
-          ...bid,
-          fitScore: newScore,
-          ...(breakdown ? { scoringBreakdown: breakdown } : {})
-        }
-      : bid
-  );
-  if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
-  }
-}
 
 export function updateBidDetails(id: string, updates: Partial<BidItem>) {
   const current = getSavedBids();
@@ -157,6 +141,19 @@ export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id"
   });
   if (typeof window !== "undefined") {
     localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
+  }
+}
+
+export function purgeAllTestData() {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("bidpulse_bids", JSON.stringify([]));
+    localStorage.removeItem("bidpulse_intake_draft");
+  }
+}
+
+export function resetToSampleData() {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("bidpulse_bids", JSON.stringify(initialBids));
   }
 }
 
