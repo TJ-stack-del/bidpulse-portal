@@ -9,6 +9,7 @@ export default function AdminPage() {
   const [selectedBid, setSelectedBid] = useState<BidItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [selectedAgencyFilter, setSelectedAgencyFilter] = useState<string>("All");
   const [activeModalTab, setActiveModalTab] = useState<"overview" | "scaffolding">("overview");
   const [copied, setCopied] = useState(false);
 
@@ -32,6 +33,17 @@ export default function AdminPage() {
       setSelectedBid(null);
     }
   };
+
+  // Compute Agency Concentration Breakdown
+  const agencyCounts = bids.reduce((acc, bid) => {
+    acc[bid.agency] = (acc[bid.agency] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const totalPipelineCapital = bids.reduce((acc, bid) => {
+    const num = parseInt((bid.estimatedValue || "").replace(/[^0-9]/g, ""), 10) || 0;
+    return acc + num;
+  }, 0);
 
   const handleExportCSV = () => {
     const headers = ["RFP ID", "Project Title", "Issuing Agency", "Target Value", "Fit Score", "Due Date", "Status", "Scope Summary"];
@@ -140,7 +152,29 @@ Generated via BidPulse Procurement Intelligence Engine
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!selectedBid) return;
+    const content = generateScaffolding(selectedBid);
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${selectedBid.id} - Proposal Scaffolding</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; padding: 30px; color: #111827; line-height: 1.5; }
+              pre { white-space: pre-wrap; word-break: break-word; font-size: 13px; }
+              @media print { body { padding: 0; } }
+            </style>
+          </head>
+          <body>
+            <pre>${content}</pre>
+            <script>window.onload = function() { window.print(); };</script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
   };
 
   const filteredBids = bids.filter((bid) => {
@@ -149,7 +183,8 @@ Generated via BidPulse Procurement Intelligence Engine
       bid.agency.toLowerCase().includes(searchQuery.toLowerCase()) ||
       bid.id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "All" || bid.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesAgency = selectedAgencyFilter === "All" || bid.agency === selectedAgencyFilter;
+    return matchesSearch && matchesStatus && matchesAgency;
   });
 
   return (
@@ -162,7 +197,9 @@ Generated via BidPulse Procurement Intelligence Engine
               ← Mission Control
             </Link>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-emerald-400">Operations Pipeline</h1>
-            <p className="text-xs sm:text-sm text-slate-400">Track active solicitations, submission deadlines, and bid viability.</p>
+            <p className="text-xs sm:text-sm text-slate-400">
+              Active Pipeline Capital: <span className="text-slate-200 font-bold font-mono">${totalPipelineCapital.toLocaleString()}</span> across {bids.length} solicitations.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
             <button
@@ -186,6 +223,38 @@ Generated via BidPulse Procurement Intelligence Engine
             </Link>
           </div>
         </header>
+
+        {/* Agency Concentration Rollup Filter */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-slate-500 font-bold uppercase tracking-wider whitespace-nowrap text-[11px] mr-1">
+            Agency Focus:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedAgencyFilter("All")}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
+              selectedAgencyFilter === "All"
+                ? "bg-slate-800 text-emerald-400 border border-emerald-500/40 shadow-sm"
+                : "bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200"
+            }`}
+          >
+            All Agencies ({bids.length})
+          </button>
+          {Object.entries(agencyCounts).map(([agencyName, count]) => (
+            <button
+              key={agencyName}
+              type="button"
+              onClick={() => setSelectedAgencyFilter(agencyName)}
+              className={`px-3 py-1.5 rounded-lg font-semibold transition whitespace-nowrap ${
+                selectedAgencyFilter === agencyName
+                  ? "bg-slate-800 text-emerald-400 border border-emerald-500/40 shadow-sm"
+                  : "bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200"
+              }`}
+            >
+              {agencyName} ({count})
+            </button>
+          ))}
+        </div>
 
         {/* Filter & Search Bar */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-900/60 p-4 rounded-xl border border-slate-800">
@@ -288,7 +357,7 @@ Generated via BidPulse Procurement Intelligence Engine
                 {filteredBids.length === 0 && (
                   <tr>
                     <td colSpan={7} className="text-center py-8 text-slate-500 text-sm">
-                      No matching solicitations found in the queue.
+                      No matching solicitations found for this filter.
                     </td>
                   </tr>
                 )}
@@ -413,7 +482,7 @@ Generated via BidPulse Procurement Intelligence Engine
               </div>
             )}
 
-            {/* Modal Body: Tab 2 - Proposal Scaffolding & Printable View */}
+            {/* Modal Body: Tab 2 - Proposal Scaffolding */}
             {(activeModalTab === "scaffolding" || typeof window !== "undefined") && (
               <div className={`space-y-3 ${activeModalTab !== "scaffolding" ? "hidden print:block" : "block"}`}>
                 <div className="flex justify-between items-center bg-slate-950 px-3.5 py-2 rounded-lg border border-slate-800 print:hidden">
