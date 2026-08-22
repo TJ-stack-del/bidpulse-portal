@@ -25,6 +25,7 @@ export interface BidItem {
   scope?: string;
   documentUrl?: string;
   documentName?: string;
+  userId?: string;
   scoringBreakdown?: ScoringBreakdown;
   tickets?: SupportTicket[];
 }
@@ -37,60 +38,6 @@ export interface IntakeDraft {
   scope: string;
   savedAt: string;
 }
-
-export const initialBids: BidItem[] = [
-  {
-    id: "BID-101",
-    title: "Facilities Maintenance & Sanitation Services",
-    agency: "Duval County Public Schools",
-    dueDate: "2026-09-15",
-    status: "Drafting",
-    fitScore: 92,
-    estimatedValue: "$180,000",
-    scope: "Daily custodial operations, floor maintenance, and sanitation across district facilities.",
-    scoringBreakdown: {
-      certifications: 25,
-      pastPerformance: 25,
-      laborCapacity: 22,
-      equipmentReadiness: 20
-    },
-    tickets: []
-  },
-  {
-    id: "BID-102",
-    title: "Commercial Janitorial & Daily Custodial",
-    agency: "City of Jacksonville",
-    dueDate: "2026-09-22",
-    status: "Review",
-    fitScore: 88,
-    estimatedValue: "$250,000",
-    scope: "Comprehensive daily office cleaning, trash removal, and restroom sanitization.",
-    scoringBreakdown: {
-      certifications: 25,
-      pastPerformance: 20,
-      laborCapacity: 23,
-      equipmentReadiness: 20
-    },
-    tickets: []
-  },
-  {
-    id: "BID-103",
-    title: "Quarterly Deep Clean & Floor Care",
-    agency: "JTA Transit Authority",
-    dueDate: "2026-10-05",
-    status: "Submitted",
-    fitScore: 68,
-    estimatedValue: "$95,000",
-    scope: "Quarterly high-frequency carpet extraction and hard-surface machine scrubbing.",
-    scoringBreakdown: {
-      certifications: 15,
-      pastPerformance: 15,
-      laborCapacity: 20,
-      equipmentReadiness: 18
-    },
-    tickets: []
-  }
-];
 
 export async function uploadRfpDocument(file: File): Promise<{ url: string; name: string } | null> {
   try {
@@ -114,15 +61,17 @@ export async function uploadRfpDocument(file: File): Promise<{ url: string; name
   }
 }
 
-export async function fetchAllBidsFromCloud(): Promise<BidItem[]> {
+export async function fetchUserBidsFromCloud(userId?: string): Promise<BidItem[]> {
   try {
-    const { data: bidsData, error: bidsError } = await supabase
-      .from("bids")
-      .select("*")
-      .order("created_at", { ascending: false });
+    let query = supabase.from("bids").select("*").order("created_at", { ascending: false });
+    if (userId) {
+      query = query.eq("user_id", userId);
+    }
 
-    if (bidsError || !bidsData || bidsData.length === 0) {
-      return getSavedBids();
+    const { data: bidsData, error: bidsError } = await query;
+
+    if (bidsError || !bidsData) {
+      return getSavedBids(userId);
     }
 
     const { data: ticketsData } = await supabase.from("support_tickets").select("*");
@@ -148,27 +97,25 @@ export async function fetchAllBidsFromCloud(): Promise<BidItem[]> {
         scope: b.scope,
         documentUrl: b.document_url,
         documentName: b.document_name,
+        userId: b.user_id,
         scoringBreakdown: b.scoring_breakdown,
         tickets: relatedTickets
       };
     });
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bidpulse_bids", JSON.stringify(mapped));
+    if (typeof window !== "undefined" && userId) {
+      localStorage.setItem(`bidpulse_bids_${userId}`, JSON.stringify(mapped));
     }
     return mapped;
   } catch (err) {
-    return getSavedBids();
+    return getSavedBids(userId);
   }
 }
 
-export function getSavedBids(): BidItem[] {
-  if (typeof window === "undefined") return initialBids;
-  const stored = localStorage.getItem("bidpulse_bids");
-  if (stored === null) {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(initialBids));
-    return initialBids;
-  }
+export function getSavedBids(userId?: string): BidItem[] {
+  if (typeof window === "undefined" || !userId) return [];
+  const stored = localStorage.getItem(`bidpulse_bids_${userId}`);
+  if (!stored) return [];
   try {
     return JSON.parse(stored);
   } catch (e) {
@@ -176,20 +123,24 @@ export function getSavedBids(): BidItem[] {
   }
 }
 
-export function getBidById(id: string): BidItem | undefined {
-  const all = getSavedBids();
+export function getBidById(id: string, userId?: string): BidItem | undefined {
+  const all = getSavedBids(userId);
   return all.find((b) => b.id === id);
 }
 
-export function saveNewBid(newBid: BidItem) {
-  const current = getSavedBids();
-  const updated = [newBid, ...current];
+export function saveNewBid(newBid: BidItem, userId?: string) {
+  if (!userId) return;
+  const bidWithUser = { ...newBid, userId };
+  const current = getSavedBids(userId);
+  const updated = [bidWithUser, ...current.filter(b => b.id !== newBid.id)];
+  
   if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
+    localStorage.setItem(`bidpulse_bids_${userId}`, JSON.stringify(updated));
   }
 
   supabase.from("bids").insert({
     id: newBid.id,
+    user_id: userId,
     title: newBid.title,
     agency: newBid.agency,
     due_date: newBid.dueDate,
@@ -205,11 +156,12 @@ export function saveNewBid(newBid: BidItem) {
 
 export const saveBid = saveNewBid;
 
-export function updateBidDetails(id: string, updates: Partial<BidItem>) {
-  const current = getSavedBids();
+export function updateBidDetails(id: string, updates: Partial<BidItem>, userId?: string) {
+  if (!userId) return;
+  const current = getSavedBids(userId);
   const updated = current.map((bid) => (bid.id === id ? { ...bid, ...updates } : bid));
   if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
+    localStorage.setItem(`bidpulse_bids_${userId}`, JSON.stringify(updated));
   }
 
   const payload: Record<string, unknown> = {};
@@ -224,26 +176,28 @@ export function updateBidDetails(id: string, updates: Partial<BidItem>) {
   supabase.from("bids").update(payload).eq("id", id).then();
 }
 
-export function updateBidScore(id: string, fitScore: number, scoringBreakdown?: ScoringBreakdown) {
-  updateBidDetails(id, { fitScore, scoringBreakdown });
+export function updateBidScore(id: string, fitScore: number, scoringBreakdown?: ScoringBreakdown, userId?: string) {
+  updateBidDetails(id, { fitScore, scoringBreakdown }, userId);
 }
 
-export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id" | "createdAt">) {
+export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id" | "createdAt">, userId?: string) {
   const ticketId = `TKT-${Math.floor(1000 + Math.random() * 9000)}`;
   const createdAt = new Date().toLocaleString();
   const newTicket: SupportTicket = { ...ticket, id: ticketId, createdAt };
 
-  const current = getSavedBids();
-  const updated = current.map((bid) => {
-    if (bid.id === bidId) {
-      const existing = bid.tickets || [];
-      return { ...bid, tickets: [newTicket, ...existing] };
-    }
-    return bid;
-  });
+  if (userId) {
+    const current = getSavedBids(userId);
+    const updated = current.map((bid) => {
+      if (bid.id === bidId) {
+        const existing = bid.tickets || [];
+        return { ...bid, tickets: [newTicket, ...existing] };
+      }
+      return bid;
+    });
 
-  if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`bidpulse_bids_${userId}`, JSON.stringify(updated));
+    }
   }
 
   supabase.from("support_tickets").insert({
@@ -255,18 +209,13 @@ export function addSupportTicket(bidId: string, ticket: Omit<SupportTicket, "id"
   }).then();
 }
 
-export function purgeAllTestData() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify([]));
+export function purgeAllTestData(userId?: string) {
+  if (typeof window !== "undefined" && userId) {
+    localStorage.removeItem(`bidpulse_bids_${userId}`);
     localStorage.removeItem("bidpulse_intake_draft");
   }
-  supabase.from("support_tickets").delete().neq("id", "none").then();
-  supabase.from("bids").delete().neq("id", "none").then();
-}
-
-export function resetToSampleData() {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("bidpulse_bids", JSON.stringify(initialBids));
+  if (userId) {
+    supabase.from("bids").delete().eq("user_id", userId).then();
   }
 }
 
