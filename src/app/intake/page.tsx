@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { saveNewBid } from "../bids";
+import { saveNewBid, getSavedDraft, saveDraft, clearSavedDraft } from "../bids";
 
 export default function IntakePage() {
   const router = useRouter();
@@ -12,6 +12,46 @@ export default function IntakePage() {
   const [dueDate, setDueDate] = useState("");
   const [estimatedValue, setEstimatedValue] = useState("");
   const [scope, setScope] = useState("");
+  const [draftRecoveredTime, setDraftRecoveredTime] = useState<string | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<string>("Ready");
+
+  // Load existing draft if present
+  useEffect(() => {
+    const existing = getSavedDraft();
+    if (existing && (existing.title || existing.agency || existing.scope)) {
+      setTitle(existing.title || "");
+      setAgency(existing.agency || "");
+      setDueDate(existing.dueDate || "");
+      setEstimatedValue(existing.estimatedValue || "");
+      setScope(existing.scope || "");
+      setDraftRecoveredTime(existing.savedAt);
+    }
+  }, []);
+
+  // Auto-save on field changes
+  useEffect(() => {
+    if (!title && !agency && !dueDate && !estimatedValue && !scope) return;
+
+    const timer = setTimeout(() => {
+      saveDraft({ title, agency, dueDate, estimatedValue, scope });
+      setAutoSaveStatus(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [title, agency, dueDate, estimatedValue, scope]);
+
+  const handleDiscardDraft = () => {
+    if (confirm("Are you sure you want to discard this draft and start clean?")) {
+      clearSavedDraft();
+      setTitle("");
+      setAgency("");
+      setDueDate("");
+      setEstimatedValue("");
+      setScope("");
+      setDraftRecoveredTime(null);
+      setAutoSaveStatus("Cleared");
+    }
+  };
 
   const calculateHeuristicScore = (val: string, scopeText: string): number => {
     let score = 70;
@@ -46,10 +86,12 @@ export default function IntakePage() {
       status: "Drafting" as const,
       fitScore: calculatedFit,
       estimatedValue: estimatedValue || "TBD",
-      scope: scope || "Standard procurement scope pending full technical narrative."
+      scope: scope || "Standard procurement scope pending full technical narrative.",
+      tickets: []
     };
 
     saveNewBid(newBid);
+    clearSavedDraft();
     router.push(`/intake/confirmation?id=${newBid.id}`);
   };
 
@@ -60,9 +102,15 @@ export default function IntakePage() {
         {/* Header */}
         <div className="flex justify-between items-start border-b border-slate-100 pb-5">
           <div>
-            <Link href="/" className="text-xs text-slate-500 hover:text-slate-900 font-medium transition flex items-center gap-1 mb-1">
-              ← Return Home
-            </Link>
+            <div className="flex items-center gap-3 mb-1">
+              <Link href="/" className="text-xs text-slate-500 hover:text-slate-900 font-medium transition">
+                ← Return Home
+              </Link>
+              <span className="text-slate-300">•</span>
+              <Link href="/portal" className="text-xs text-emerald-600 hover:text-emerald-700 font-bold transition">
+                Go to My Submittals →
+              </Link>
+            </div>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-950">Send Us a Bid</h1>
             <p className="text-xs sm:text-sm text-slate-500">
               Submit solicitation details to begin compliance analysis and SOW drafting.
@@ -75,7 +123,26 @@ export default function IntakePage() {
           </div>
         </div>
 
-        {/* Intake Form */}
+        {/* Draft Recovered Notification Banner */}
+        {draftRecoveredTime && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between text-xs text-amber-900">
+            <div className="flex items-center gap-2">
+              <span className="text-base">📝</span>
+              <span>
+                <strong>Restored active draft</strong> from earlier session ({draftRecoveredTime}).
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="text-amber-800 hover:text-red-700 underline font-semibold text-[11px] cursor-pointer"
+            >
+              Discard Draft
+            </button>
+          </div>
+        )}
+
+        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -144,6 +211,19 @@ export default function IntakePage() {
               onChange={(e) => setScope(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 focus:bg-white transition"
             />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
+            <span>💾 Auto-save: {autoSaveStatus}</span>
+            {(title || agency || scope) && (
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="text-slate-400 hover:text-red-500 transition cursor-pointer"
+              >
+                Clear all fields
+              </button>
+            )}
           </div>
 
           <div className="pt-2">
