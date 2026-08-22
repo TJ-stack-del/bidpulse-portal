@@ -23,6 +23,8 @@ export interface BidItem {
   fitScore: number;
   estimatedValue?: string;
   scope?: string;
+  documentUrl?: string;
+  documentName?: string;
   scoringBreakdown?: ScoringBreakdown;
   tickets?: SupportTicket[];
 }
@@ -90,6 +92,28 @@ export const initialBids: BidItem[] = [
   }
 ];
 
+export async function uploadRfpDocument(file: File): Promise<{ url: string; name: string } | null> {
+  try {
+    const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const filePath = `solicitations/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("rfp-documents")
+      .upload(filePath, file, { cacheControl: "3600", upsert: false });
+
+    if (uploadError) {
+      console.warn("Storage upload error:", uploadError.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("rfp-documents").getPublicUrl(filePath);
+    return { url: data.publicUrl, name: file.name };
+  } catch (err) {
+    console.warn("Storage exception:", err);
+    return null;
+  }
+}
+
 export async function fetchAllBidsFromCloud(): Promise<BidItem[]> {
   try {
     const { data: bidsData, error: bidsError } = await supabase
@@ -122,6 +146,8 @@ export async function fetchAllBidsFromCloud(): Promise<BidItem[]> {
         fitScore: b.fit_score,
         estimatedValue: b.estimated_value,
         scope: b.scope,
+        documentUrl: b.document_url,
+        documentName: b.document_name,
         scoringBreakdown: b.scoring_breakdown,
         tickets: relatedTickets
       };
@@ -171,6 +197,8 @@ export function saveNewBid(newBid: BidItem) {
     fit_score: newBid.fitScore,
     estimated_value: newBid.estimatedValue,
     scope: newBid.scope,
+    document_url: newBid.documentUrl,
+    document_name: newBid.documentName,
     scoring_breakdown: newBid.scoringBreakdown
   }).then();
 }
@@ -186,10 +214,12 @@ export function updateBidDetails(id: string, updates: Partial<BidItem>) {
 
   const payload: Record<string, unknown> = {};
   if (updates.status) payload.status = updates.status;
-  if (updates.fitScore) payload.fit_score = updates.fitScore;
-  if (updates.estimatedValue) payload.estimated_value = updates.estimatedValue;
-  if (updates.scope) payload.scope = updates.scope;
-  if (updates.scoringBreakdown) payload.scoring_breakdown = updates.scoringBreakdown;
+  if (updates.fitScore !== undefined) payload.fit_score = updates.fitScore;
+  if (updates.estimatedValue !== undefined) payload.estimated_value = updates.estimatedValue;
+  if (updates.scope !== undefined) payload.scope = updates.scope;
+  if (updates.documentUrl !== undefined) payload.document_url = updates.documentUrl;
+  if (updates.documentName !== undefined) payload.document_name = updates.documentName;
+  if (updates.scoringBreakdown !== undefined) payload.scoring_breakdown = updates.scoringBreakdown;
 
   supabase.from("bids").update(payload).eq("id", id).then();
 }
