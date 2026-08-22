@@ -6,15 +6,6 @@ import { usePathname } from "next/navigation";
 import { getCurrentUser, signOutUser } from "../auth";
 import { User } from "@supabase/supabase-js";
 
-const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/search", label: "🔍 Live Search" },
-  { href: "/portal", label: "Workspace" },
-  { href: "/fit-score", label: "Fit Evaluator" },
-  { href: "/settings", label: "⚙️ Criteria" },
-  { href: "/admin", label: "Admin" },
-];
-
 export default function Navbar() {
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
@@ -30,8 +21,21 @@ export default function Navbar() {
     window.location.href = "/login";
   };
 
+  const navLinks = [
+    { href: "/", label: "Home" },
+    { href: "/search", label: "🔍 Live Search" },
+    { href: "/portal", label: "Workspace" },
+    { href: "/fit-score", label: "Fit Evaluator" },
+    { href: "/settings", label: "⚙️ Criteria" },
+  ];
+
+  // Dynamic permission: Only show Admin if authenticated
+  if (user) {
+    navLinks.push({ href: "/admin", label: "Admin Console" });
+  }
+
   return (
-    <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur sticky top-0 z-50">
+    <header className="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo */}
@@ -44,9 +48,9 @@ export default function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
+          {/* Desktop Links */}
           <div className="hidden md:flex items-center gap-1.5">
-            {NAV_LINKS.map((link) => {
+            {navLinks.map((link) => {
               const isActive = pathname === link.href;
               return (
                 <Link
@@ -64,11 +68,11 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Right Action Area */}
+          {/* Right Controls */}
           <div className="hidden md:flex items-center gap-3">
             <Link
               href="/intake"
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
             >
               + New Intake
             </Link>
@@ -83,19 +87,19 @@ export default function Navbar() {
             ) : (
               <Link
                 href="/login"
-                className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+                className="px-3.5 py-1.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
               >
                 Sign In
               </Link>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Button */}
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none"
-              aria-label="Toggle navigation menu"
+              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Toggle navigation"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {mobileMenuOpen ? (
@@ -112,7 +116,7 @@ export default function Navbar() {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pt-2 pb-4 space-y-1">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -134,9 +138,25 @@ export default function Navbar() {
             >
               + New Intake
             </Link>
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="w-full text-center py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold"
+              >
+                Sign Out ({user.email?.split("@")[0]})
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold"
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 }
