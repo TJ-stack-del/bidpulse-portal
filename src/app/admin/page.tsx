@@ -2,525 +2,262 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { getSavedBids, purgeAllTestData, resetToSampleData, BidItem, SupportTicket } from "../bids";
+import { useRouter } from "next/navigation";
+import { getSavedBids, fetchAllBidsFromCloud, addSupportTicket, purgeAllTestData, resetToSampleData, BidItem } from "../bids";
+import { getCurrentUser, signOutUser } from "../auth";
+import { User } from "@supabase/supabase-js";
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const [pinError, setPinError] = useState(false);
-
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [bids, setBids] = useState<BidItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>("All");
-  const [agencyFilter, setAgencyFilter] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBid, setSelectedBid] = useState<BidItem | null>(null);
-  const [activeTab, setActiveTab] = useState<"pricing" | "sow" | "tickets">("pricing");
-
-  // Pricing Matrix State
-  const [laborHours, setLaborHours] = useState(120);
-  const [hourlyRate, setHourlyRate] = useState(28);
-  const [materialsCost, setMaterialsCost] = useState(1500);
-  const [subcontractorCost, setSubcontractorCost] = useState(0);
-  const [overheadPercent, setOverheadPercent] = useState(15);
-  const [marginPercent, setMarginPercent] = useState(20);
-
-  // Proposal SOW Generator State
-  const [contractorName, setContractorName] = useState("Coleman Facilities & Janitorial Solutions LLC");
-  const [vendorUei, setVendorUei] = useState("NC89X2KLM451");
-  const [vendorCage, setVendorCage] = useState("9K8B2");
-  const [naicsCode, setNaicsCode] = useState("561720 (Janitorial Services)");
-  const [sowNotes, setSowNotes] = useState("Standard night-shift commercial cleaning, floor sanitization, and waste disposal per RFP requirements.");
+  const [selectedBidId, setSelectedBidId] = useState<string>("");
+  const [ticketType, setTicketType] = useState<"Addendum Upload" | "Timeline Clarification" | "Pricing Adjustment" | "General">("Addendum Upload");
+  const [ticketMessage, setTicketMessage] = useState("");
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    setBids(getSavedBids());
+    async function checkAuthAndLoad() {
+      setAuthChecking(true);
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      
+      const cached = getSavedBids();
+      if (cached && cached.length > 0) {
+        setBids(cached);
+        setSelectedBidId(cached[0].id);
+      }
+      
+      const cloud = await fetchAllBidsFromCloud();
+      if (cloud && cloud.length > 0) {
+        setBids(cloud);
+        if (!selectedBidId) setSelectedBidId(cloud[0].id);
+      }
+      setAuthChecking(false);
+    }
+    checkAuthAndLoad();
   }, []);
 
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const handleSignOut = async () => {
+    await signOutUser();
+    setUser(null);
+    router.push("/login");
+  };
+
+  const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === "1234") {
-      setIsAuthenticated(true);
-      setPinError(false);
-    } else {
-      setPinError(true);
-    }
+    if (!selectedBidId || !ticketMessage) return;
+
+    addSupportTicket(selectedBidId, {
+      type: ticketType,
+      message: ticketMessage
+    });
+
+    setTicketMessage("");
+    setActionNotice("Support ticket dispatched and recorded.");
+    setTimeout(() => setActionNotice(null), 3500);
+
+    const refreshed = getSavedBids();
+    setBids(refreshed);
   };
 
-  const calculateTotals = () => {
-    const directLabor = laborHours * hourlyRate;
-    const directCosts = directLabor + materialsCost + subcontractorCost;
-    const overhead = directCosts * (overheadPercent / 100);
-    const subtotal = directCosts + overhead;
-    const profit = subtotal * (marginPercent / 100);
-    const totalPrice = subtotal + profit;
-    return { directLabor, directCosts, overhead, subtotal, profit, totalPrice };
-  };
-
-  const totals = calculateTotals();
-
-  const handleUpdateStatus = (newStatus: "Drafting" | "Review" | "Submitted") => {
-    if (!selectedBid) return;
-    const updated = bids.map((b) => (b.id === selectedBid.id ? { ...b, status: newStatus } : b));
-    setBids(updated);
-    setSelectedBid({ ...selectedBid, status: newStatus });
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bidpulse_bids", JSON.stringify(updated));
-    }
-  };
-
-  const handleResolveTicket = (ticketId: string) => {
-    if (!selectedBid) return;
-    const updatedTickets = (selectedBid.tickets || []).filter((t) => t.id !== ticketId);
-    const updatedBid = { ...selectedBid, tickets: updatedTickets };
-    const updatedBids = bids.map((b) => (b.id === selectedBid.id ? updatedBid : b));
-    setBids(updatedBids);
-    setSelectedBid(updatedBid);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bidpulse_bids", JSON.stringify(updatedBids));
-    }
-  };
-
-  const handlePurgeData = () => {
-    if (confirm("PURGE WARNING: This will clear all mock test records and reset the pipeline to 0 for production use. Continue?")) {
+  const handlePurge = () => {
+    if (confirm("Are you sure you want to purge all bids and tickets? This clears local & cloud records.")) {
       purgeAllTestData();
       setBids([]);
-      setSelectedBid(null);
+      setActionNotice("All test data has been purged.");
+      setTimeout(() => setActionNotice(null), 3500);
     }
   };
 
-  const handleLoadSamples = () => {
+  const handleReset = () => {
     resetToSampleData();
-    const loaded = getSavedBids();
-    setBids(loaded);
+    const refreshed = getSavedBids();
+    setBids(refreshed);
+    if (refreshed.length > 0) setSelectedBidId(refreshed[0].id);
+    setActionNotice("Reset database to standard sample bids.");
+    setTimeout(() => setActionNotice(null), 3500);
   };
 
-  const filteredBids = bids.filter((b) => {
-    const matchStatus = statusFilter === "All" || b.status === statusFilter;
-    const matchAgency = agencyFilter === "All" || b.agency === agencyFilter;
-    const matchSearch =
-      b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.agency.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.id.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchStatus && matchAgency && matchSearch;
-  });
-
-  const totalPipeline = bids.reduce((acc, b) => {
-    const val = parseInt((b.estimatedValue || "").replace(/[^0-9]/g, ""), 10) || 0;
-    return acc + val;
-  }, 0);
-
-  const totalInboundTickets = bids.reduce((acc, b) => acc + (b.tickets?.length || 0), 0);
-
-  if (!isAuthenticated) {
+  if (authChecking) {
     return (
-      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-        <div className="max-w-sm w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-5 text-center shadow-2xl">
-          <div className="h-12 w-12 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold border border-emerald-500/20">
-            🔒
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-black">Operations Command Gate</h1>
-            <p className="text-xs text-slate-400">Enter operations security PIN to access the pipeline dashboard.</p>
-          </div>
-          <form onSubmit={handlePinSubmit} className="space-y-3">
-            <input
-              type="password"
-              placeholder="Enter PIN (Default: 1234)"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-center font-mono tracking-widest text-sm focus:outline-none focus:border-emerald-500 text-white"
-            />
-            {pinError && <p className="text-xs text-red-400 font-medium">Invalid security PIN.</p>}
-            <button
-              type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition cursor-pointer"
-            >
-              Unlock Dashboard →
-            </button>
-          </form>
-          <Link href="/" className="text-[11px] text-slate-500 hover:text-slate-300 block">
-            ← Return to Public Portal
-          </Link>
-        </div>
-      </main>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-500 text-sm">
+        Verifying administrator session...
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased p-4 sm:p-8 space-y-6">
-      {/* Top Bar */}
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-mono uppercase font-bold text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded">
-              OPERATIONS INTERNAL
-            </span>
-            <span className="text-xs text-slate-400 font-mono">
-              Pipeline: ${totalPipeline.toLocaleString()} across {bids.length} bids
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white mt-1">Proposal Command & Dispatch</h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {totalInboundTickets > 0 && (
-            <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 font-bold">
-              <span>⚠️</span>
-              <span>{totalInboundTickets} Inbound Addenda</span>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <nav className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-lg shadow-sm">
+              B
             </div>
-          )}
-
-          {bids.length > 0 ? (
-            <button
-              type="button"
-              onClick={handlePurgeData}
-              className="bg-red-950 hover:bg-red-900 text-red-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-red-800 transition cursor-pointer"
-              title="Purge placeholder test bids before onboarding live clients"
-            >
-              🧹 Purge Test Data
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleLoadSamples}
-              className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-800 transition cursor-pointer"
-            >
-              ↺ Reload Sample Records
-            </button>
-          )}
-
-          <Link
-            href="/portal"
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-slate-700"
-          >
-            Client Portal
+            <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white">
+              BidPulse <span className="text-xs text-rose-500 font-bold uppercase tracking-widest ml-1">Admin</span>
+            </span>
           </Link>
-          <button
-            type="button"
-            onClick={() => setIsAuthenticated(false)}
-            className="bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white px-3 py-1.5 rounded-xl text-xs transition border border-slate-800 cursor-pointer"
-          >
-            Lock
-          </button>
-        </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Col: Master Queue */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="flex flex-wrap gap-2 items-center justify-between bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-            <input
-              type="text"
-              placeholder="Search by title, agency, or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-xs text-slate-200 px-3 py-2 rounded-xl focus:outline-none focus:border-emerald-500 w-full sm:w-64"
-            />
-            <div className="flex items-center gap-1.5 text-xs overflow-x-auto">
-              {["All", "Drafting", "Review", "Submitted"].map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setStatusFilter(status)}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
-                    statusFilter === status
-                      ? "bg-emerald-600 text-white"
-                      : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
-                  }`}
+          <div className="flex items-center gap-4 text-sm font-medium">
+            <Link href="/" className="text-slate-600 dark:text-slate-400 hover:text-blue-600">Home</Link>
+            <Link href="/portal" className="text-slate-600 dark:text-slate-400 hover:text-blue-600">Workspace</Link>
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
+              >
+                Sign Out ({user.email?.split("@")[0]})
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm"
+              >
+                Admin Sign In
+              </Link>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-4 py-10">
+        {!user && (
+          <div className="mb-8 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 flex items-center justify-between">
+            <span className="text-xs text-amber-800 dark:text-amber-300 font-semibold">
+              🔒 You are in guest preview mode. Sign in to lock down administrative changes.
+            </span>
+            <Link href="/login" className="text-xs font-bold text-blue-600 underline">
+              Sign In Now &rarr;
+            </Link>
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6 mb-8">
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2.5 py-1 rounded-full">
+              Operations Control
+            </span>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mt-2">
+              System Administration & Tickets
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              Dispatch RFP addenda updates, log clarifying tickets, and maintain pipeline integrity.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReset}
+              className="px-3.5 py-2 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
+            >
+              Reset Sample Bids
+            </button>
+            <button
+              onClick={handlePurge}
+              className="px-3.5 py-2 text-xs font-bold rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-sm cursor-pointer"
+            >
+              Purge All Data
+            </button>
+          </div>
+        </div>
+
+        {actionNotice && (
+          <div className="mb-6 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 text-xs font-bold">
+            ✓ {actionNotice}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Dispatch Ticket Module */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+              Log Solicitation Ticket / Addendum
+            </h3>
+            <form onSubmit={handleCreateTicket} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                  Target Solicitation Record
+                </label>
+                <select
+                  value={selectedBidId}
+                  onChange={(e) => setSelectedBidId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium outline-none"
                 >
-                  {status}
-                </button>
+                  {bids.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      [{b.id}] {b.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                  Ticket Category
+                </label>
+                <select
+                  value={ticketType}
+                  onChange={(e) => setTicketType(e.target.value as typeof ticketType)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm font-medium outline-none"
+                >
+                  <option value="Addendum Upload">Addendum Upload</option>
+                  <option value="Timeline Clarification">Timeline Clarification</option>
+                  <option value="Pricing Adjustment">Pricing Adjustment</option>
+                  <option value="General">General Inquiry</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                  Message / Modification Scope
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={ticketMessage}
+                  onChange={(e) => setTicketMessage(e.target.value)}
+                  placeholder="Detail changes from the issuing authority..."
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm shadow-md transition-all cursor-pointer"
+              >
+                Log Ticket to Solicitation
+              </button>
+            </form>
+          </div>
+
+          {/* Active Solicitation Audits */}
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">
+              Database Audit Record ({bids.length} Active)
+            </h3>
+            <div className="space-y-4 max-h-[440px] overflow-y-auto pr-1">
+              {bids.map((b) => (
+                <div key={b.id} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">{b.id}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{b.status}</span>
+                  </div>
+                  <h4 className="font-bold text-sm text-slate-900 dark:text-white">{b.title}</h4>
+                  <p className="text-xs text-slate-500">{b.agency} &bull; Due: {b.dueDate}</p>
+                  {(b.tickets?.length ?? 0) > 0 && (
+                    <div className="mt-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                      ⚡ {b.tickets?.length} Support / Addenda Tickets Logged
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider">
-              <span>Active Solicitations Queue ({filteredBids.length})</span>
-            </div>
-            <div className="divide-y divide-slate-800/60">
-              {filteredBids.length === 0 ? (
-                <div className="p-12 text-center text-xs text-slate-500 space-y-2">
-                  <div className="text-2xl">📥</div>
-                  <div className="font-bold text-slate-400">Pipeline is clean & ready for live submissions</div>
-                  <p>When clients submit proposals via /intake, they will populate here instantly.</p>
-                </div>
-              ) : (
-                filteredBids.map((b) => (
-                  <div
-                    key={b.id}
-                    onClick={() => setSelectedBid(b)}
-                    className={`p-4 hover:bg-slate-800/50 transition cursor-pointer flex items-center justify-between gap-4 ${
-                      selectedBid?.id === b.id ? "bg-slate-800/80 border-l-4 border-emerald-500" : ""
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-slate-300">{b.id}</span>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-xs text-slate-400">{b.agency}</span>
-                        {b.tickets && b.tickets.length > 0 && (
-                          <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-500/30">
-                            {b.tickets.length} Inquiry
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm font-bold text-white leading-snug">{b.title}</div>
-                      <div className="text-xs text-slate-400">
-                        Due: <span className="font-mono text-slate-300">{b.dueDate}</span> | Value:{" "}
-                        <span className="font-mono text-emerald-400 font-bold">{b.estimatedValue || "TBD"}</span>
-                      </div>
-                    </div>
-
-                    <div className="text-right space-y-1 shrink-0">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        b.status === "Drafting"
-                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                          : b.status === "Review"
-                          ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                          : "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                      }`}>
-                        {b.status}
-                      </span>
-                      <div className="text-xs font-mono font-bold text-emerald-400">{b.fitScore}% Fit</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
-
-        {/* Right Col: Inspector */}
-        <div className="lg:col-span-5 space-y-4">
-          {selectedBid ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-2xl">
-              <div className="border-b border-slate-800 pb-4 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase font-bold text-slate-400">{selectedBid.id}</span>
-                    <h3 className="text-lg font-black text-white leading-tight">{selectedBid.title}</h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBid(null)}
-                    className="text-slate-500 hover:text-slate-300 text-xs font-bold cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-1.5 pt-1">
-                  <span className="text-[10px] uppercase font-mono text-slate-400 mr-1">Stage:</span>
-                  {(["Drafting", "Review", "Submitted"] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => handleUpdateStatus(st)}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                        selectedBid.status === st
-                          ? "bg-emerald-600 text-white"
-                          : "bg-slate-950 text-slate-400 hover:text-white border border-slate-800"
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2 text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("pricing")}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    activeTab === "pricing" ? "bg-slate-800 text-emerald-400" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  💲 Pricing Modeler
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("sow")}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                    activeTab === "sow" ? "bg-slate-800 text-emerald-400" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  📄 SOW Proposal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("tickets")}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                    activeTab === "tickets" ? "bg-slate-800 text-amber-400" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <span>💬 Addenda</span>
-                  {selectedBid.tickets && selectedBid.tickets.length > 0 && (
-                    <span className="h-4 w-4 bg-amber-500 text-slate-950 rounded-full text-[10px] flex items-center justify-center font-black">
-                      {selectedBid.tickets.length}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {activeTab === "pricing" && (
-                <div className="space-y-4 text-xs">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-slate-400 block mb-1">Direct Labor Hours</label>
-                      <input
-                        type="number"
-                        value={laborHours}
-                        onChange={(e) => setLaborHours(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-400 block mb-1">Hourly Rate ($/hr)</label>
-                      <input
-                        type="number"
-                        value={hourlyRate}
-                        onChange={(e) => setHourlyRate(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-400 block mb-1">Equipment / Materials ($)</label>
-                      <input
-                        type="number"
-                        value={materialsCost}
-                        onChange={(e) => setMaterialsCost(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-slate-400 block mb-1">Target Net Margin (%)</label>
-                      <input
-                        type="number"
-                        value={marginPercent}
-                        onChange={(e) => setMarginPercent(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2 font-mono">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Direct Labor:</span>
-                      <span className="text-white">${totals.directLabor.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Materials / Supplies:</span>
-                      <span className="text-white">${(materialsCost + subcontractorCost).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Overhead ({overheadPercent}%):</span>
-                      <span className="text-white">${totals.overhead.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Target Profit ({marginPercent}%):</span>
-                      <span className="text-emerald-400 font-bold">+${totals.profit.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm font-bold border-t border-slate-800 pt-2 text-white">
-                      <span>Calculated Submittal Price:</span>
-                      <span className="text-emerald-400 font-mono font-black">${totals.totalPrice.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "sow" && (
-                <div className="space-y-3 text-xs">
-                  <div className="space-y-2">
-                    <label className="text-slate-400 block">Prime Contractor Information</label>
-                    <input
-                      type="text"
-                      value={contractorName}
-                      onChange={(e) => setContractorName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-xs"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="UEI Number"
-                        value={vendorUei}
-                        onChange={(e) => setVendorUei(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono text-xs"
-                      />
-                      <input
-                        type="text"
-                        placeholder="CAGE Code"
-                        value={vendorCage}
-                        onChange={(e) => setVendorCage(e.target.value)}
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-white font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-slate-400 block mb-1">Technical Approach</label>
-                    <textarea
-                      rows={3}
-                      value={sowNotes}
-                      onChange={(e) => setSowNotes(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-xs"
-                    />
-                  </div>
-
-                  <Link
-                    href={`/admin/proposal/${selectedBid.id}`}
-                    target="_blank"
-                    className="w-full bg-slate-950 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-xs transition text-center block border border-slate-700 shadow-sm"
-                  >
-                    📄 Open Formal PDF / Print View →
-                  </Link>
-                </div>
-              )}
-
-              {activeTab === "tickets" && (
-                <div className="space-y-4 text-xs">
-                  {selectedBid.tickets && selectedBid.tickets.length > 0 ? (
-                    <div className="space-y-3">
-                      {selectedBid.tickets.map((t) => (
-                        <div key={t.id} className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
-                              {t.type}
-                            </span>
-                            <span className="text-slate-500 font-mono text-[10px]">{t.createdAt}</span>
-                          </div>
-                          <p className="text-slate-200 leading-relaxed text-xs">{t.message}</p>
-                          <div className="flex justify-end pt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleResolveTicket(t.id)}
-                              className="bg-slate-800 hover:bg-emerald-950 hover:text-emerald-400 text-slate-400 text-[11px] font-bold px-3 py-1 rounded-lg border border-slate-700 transition cursor-pointer"
-                            >
-                              ✓ Mark Addendum Incorporated
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center text-slate-500 space-y-1">
-                      <div>✓</div>
-                      <div>No pending addenda or support inquiries for this solicitation.</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-500 space-y-2">
-              <div className="text-2xl">📋</div>
-              <p>Select any solicitation from the queue to inspect pricing, generate SOW packages, or review client addenda.</p>
-            </div>
-          )}
-        </div>
-
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
