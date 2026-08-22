@@ -90,6 +90,52 @@ export const initialBids: BidItem[] = [
   }
 ];
 
+export async function fetchAllBidsFromCloud(): Promise<BidItem[]> {
+  try {
+    const { data: bidsData, error: bidsError } = await supabase
+      .from("bids")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (bidsError || !bidsData || bidsData.length === 0) {
+      return getSavedBids();
+    }
+
+    const { data: ticketsData } = await supabase.from("support_tickets").select("*");
+
+    const mapped: BidItem[] = bidsData.map((b) => {
+      const relatedTickets = (ticketsData || [])
+        .filter((t) => t.bid_id === b.id)
+        .map((t) => ({
+          id: t.id,
+          type: t.type as SupportTicket["type"],
+          message: t.message,
+          createdAt: t.created_at
+        }));
+
+      return {
+        id: b.id,
+        title: b.title,
+        agency: b.agency,
+        dueDate: b.due_date,
+        status: b.status as BidItem["status"],
+        fitScore: b.fit_score,
+        estimatedValue: b.estimated_value,
+        scope: b.scope,
+        scoringBreakdown: b.scoring_breakdown,
+        tickets: relatedTickets
+      };
+    });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bidpulse_bids", JSON.stringify(mapped));
+    }
+    return mapped;
+  } catch (err) {
+    return getSavedBids();
+  }
+}
+
 export function getSavedBids(): BidItem[] {
   if (typeof window === "undefined") return initialBids;
   const stored = localStorage.getItem("bidpulse_bids");
