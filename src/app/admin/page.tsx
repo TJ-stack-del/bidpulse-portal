@@ -151,7 +151,7 @@ Generated via BidPulse Procurement Intelligence Engine
     setTimeout(() => setCopied(false), 2000);
   };
 
-const handlePrint = () => {
+const handleDownloadDoc = () => {
     if (!selectedBid) return;
 
     const content = generateScaffolding(selectedBid);
@@ -531,7 +531,7 @@ const handlePrint = () => {
                       onClick={handlePrint}
                       className="text-xs font-bold px-3 py-1.5 rounded transition bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1"
                     >
-                      <span>🖨️ Print / Save PDF</span>
+                      <span>📥 Download Draft (.txt)</span>
                     </button>
                     <button
                       type="button"
