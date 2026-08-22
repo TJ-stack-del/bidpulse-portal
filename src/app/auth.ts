@@ -42,3 +42,27 @@ export async function signUpWithEmail(email: string, password: string): Promise<
 export async function signOutUser(): Promise<void> {
   await supabase.auth.signOut();
 }
+
+export async function sendPasswordResetEmail(email: string): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login?reset=true`,
+    });
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Password reset request failed.";
+    return { error: errorMessage };
+  }
+}
+
+export async function updateUserPassword(newPassword: string): Promise<{ error: string | null }> {
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Password update failed.";
+    return { error: errorMessage };
+  }
+}
