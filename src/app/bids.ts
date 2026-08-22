@@ -244,3 +244,12 @@ export function clearSavedDraft() {
     localStorage.removeItem("bidpulse_intake_draft");
   }
 }
+
+export const resetToSampleData = async () => {
+  if (typeof window !== "undefined") {
+    localStorage.clear();
+  }
+};
+
+// Backward compatibility aliases
+export const fetchAllBidsFromCloud = fetchUserBidsFromCloud;

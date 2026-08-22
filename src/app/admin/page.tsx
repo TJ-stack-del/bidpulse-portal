@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getSavedBids, fetchAllBidsFromCloud, addSupportTicket, purgeAllTestData, resetToSampleData, BidItem } from "../bids";
+import { getSavedBids, fetchUserBidsFromCloud, addSupportTicket, purgeAllTestData, resetToSampleData, BidItem } from "../bids";
 import { getCurrentUser, signOutUser } from "../auth";
 import { User } from "@supabase/supabase-js";
 
@@ -18,26 +18,34 @@ export default function AdminPage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    async function checkAuthAndLoad() {
-      setAuthChecking(true);
+  async function checkAdminAuth() {
+    try {
       const currentUser = await getCurrentUser();
+      
+      // If no user is logged in, kick them back to login
+      if (!currentUser) {
+        router.replace("/login?redirect=/admin");
+        return;
+      }
+      
       setUser(currentUser);
       
-      const cached = getSavedBids();
-      if (cached && cached.length > 0) {
-        setBids(cached);
-        setSelectedBidId(cached[0].id);
+      // Load bids once authenticated
+      const saved = getSavedBids();
+      setBids(saved);
+      if (saved.length > 0) {
+        setSelectedBidId(saved[0].id);
       }
-      
-      const cloud = await fetchAllBidsFromCloud();
-      if (cloud && cloud.length > 0) {
-        setBids(cloud);
-        if (!selectedBidId) setSelectedBidId(cloud[0].id);
-      }
+    } catch (err) {
+      console.error("Auth check failed:", err);
+      router.replace("/login?redirect=/admin");
+    } finally {
       setAuthChecking(false);
     }
-    checkAuthAndLoad();
-  }, []);
+  }
+
+  checkAdminAuth();
+}, [router]);
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -82,11 +90,16 @@ export default function AdminPage() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-500 text-sm">
-        Verifying administrator session...
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <p className="text-slate-600 text-sm font-medium">Verifying access...</p>
       </div>
     );
   }
+
+  // If check completed and no user, hold render while redirecting
+  if (!user) {
+    return null;
+  }  
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
