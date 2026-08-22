@@ -528,7 +528,7 @@ const handleDownloadDoc = () => {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={handlePrint}
+                      onClick={handleDownloadDoc}
                       className="text-xs font-bold px-3 py-1.5 rounded transition bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1"
                     >
                       <span>📥 Download Draft (.txt)</span>
