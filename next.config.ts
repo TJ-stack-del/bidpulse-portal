@@ -1,13 +1,9 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  typescript: {
-    // Allows production builds to succeed while Next.js generated route types sync
-    ignoreBuildErrors: false,
-  },
-  experimental: {
-    typedRoutes: false,
-  },
+  typedRoutes: true,
 };
 
-export default nextConfig;
+export default function(phase: string) {
+  return nextConfig;
+}

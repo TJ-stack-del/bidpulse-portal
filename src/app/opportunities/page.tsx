@@ -32,7 +32,6 @@ export default function OpportunitiesPage() {
       if (data && Array.isArray(data.solicitations) && data.solicitations.length > 0) {
         setSolicitations(data.solicitations);
       } else {
-        // Run initial seed if empty
         await handleSync();
       }
     } catch (e) {
@@ -113,9 +112,19 @@ export default function OpportunitiesPage() {
     }
   };
 
-  const filtered = selectedTrade === 'All Trades' 
-    ? solicitations 
-    : solicitations.filter(s => s.trade === selectedTrade);
+  // Robust flexible trade filtering
+  const filtered = solicitations.filter((sol) => {
+    if (selectedTrade === 'All Trades') return true;
+    const solTrade = (sol.trade || '').toLowerCase();
+    const filterKey = selectedTrade.toLowerCase();
+
+    if (filterKey.includes('janitorial')) return solTrade.includes('janitorial');
+    if (filterKey.includes('pressure')) return solTrade.includes('pressure') || solTrade.includes('washing');
+    if (filterKey.includes('landscaping')) return solTrade.includes('landscaping') || solTrade.includes('grounds') || solTrade.includes('mowing');
+    if (filterKey.includes('hauling')) return solTrade.includes('hauling') || solTrade.includes('waste') || solTrade.includes('debris');
+
+    return solTrade.includes(filterKey);
+  });
 
   return (
     <div className="max-w-7xl w-full mx-auto p-6 md:p-8">
@@ -129,7 +138,7 @@ export default function OpportunitiesPage() {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5"
+            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
           >
             <svg className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -142,7 +151,7 @@ export default function OpportunitiesPage() {
             <select 
               value={selectedTrade}
               onChange={(e) => setSelectedTrade(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none"
+              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
             >
               <option value="All Trades">All Trades</option>
               <option value="Commercial Janitorial">Commercial Janitorial</option>
@@ -158,7 +167,7 @@ export default function OpportunitiesPage() {
         <div className="text-center py-16 text-slate-400">Loading municipal solicitation feed...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-400 bg-slate-900/40 rounded-xl border border-slate-800">
-          No active solicitations found for this filter.
+          No active solicitations found for this filter. Try clicking "Sync Live Feeds".
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -210,7 +219,7 @@ export default function OpportunitiesPage() {
                     <button
                       onClick={() => handleRequestAssembly(sol)}
                       disabled={submittingId === sol.id}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-md transition disabled:opacity-50"
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-md transition disabled:opacity-50 cursor-pointer"
                     >
                       {submittingId === sol.id ? 'Redirecting...' : 'Request Assembly ($495)'}
                     </button>

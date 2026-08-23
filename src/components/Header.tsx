@@ -31,6 +31,7 @@ export default function Header() {
     await supabase.auth.signOut();
     setUser(null);
     router.push('/login');
+    router.refresh();
   };
 
   return (
@@ -73,7 +74,7 @@ export default function Header() {
               <span className="text-xs text-slate-400 font-mono hidden sm:inline">{user.email}</span>
               <button 
                 onClick={handleSignOut}
-                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition"
+                className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition cursor-pointer"
               >
                 Sign Out
               </button>
