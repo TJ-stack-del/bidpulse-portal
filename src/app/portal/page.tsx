@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { getSavedBids, fetchUserBidsFromCloud, updateBidDetails, BidItem } from "../bids";
 import { getCurrentUser } from "../auth";
@@ -14,6 +14,9 @@ export default function PortalPage() {
   const [bids, setBids] = useState<BidItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStageFilter, setSelectedStageFilter] = useState<string>("All");
+  const [sortBy, setSortBy] = useState<"urgency" | "fitScore" | "value">("urgency");
 
   useEffect(() => {
     async function loadData() {
@@ -49,6 +52,34 @@ export default function PortalPage() {
       return acc + (isNaN(num) ? 0 : num);
     }, 0);
   };
+
+  const filteredBids = useMemo(() => {
+    return bids
+      .filter((bid) => {
+        const matchesSearch =
+          bid.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          bid.agency.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          bid.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesStage =
+          selectedStageFilter === "All" || bid.status === selectedStageFilter;
+
+        return matchesSearch && matchesStage;
+      })
+      .sort((a, b) => {
+        if (sortBy === "fitScore") {
+          return (b.fitScore || 0) - (a.fitScore || 0);
+        }
+        if (sortBy === "value") {
+          const valA = parseInt((a.estimatedValue || "$0").replace(/[^0-9]/g, ""), 10) || 0;
+          const valB = parseInt((b.estimatedValue || "$0").replace(/[^0-9]/g, ""), 10) || 0;
+          return valB - valA;
+        }
+        const urgA = getDeadlineUrgency(a.dueDate).daysRemaining;
+        const urgB = getDeadlineUrgency(b.dueDate).daysRemaining;
+        return urgA - urgB;
+      });
+  }, [bids, searchQuery, selectedStageFilter, sortBy]);
 
   if (loading) {
     return (
@@ -101,7 +132,6 @@ export default function PortalPage() {
           </h1>
         </div>
 
-        {/* Action & View Toggles */}
         <div className="flex items-center gap-3">
           <div className="bg-slate-200 dark:bg-slate-800 p-1 rounded-xl flex items-center gap-1">
             <button
@@ -135,8 +165,8 @@ export default function PortalPage() {
         </div>
       </div>
 
-      {/* Summary Value Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Active Pipeline</span>
           <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">
@@ -154,11 +184,53 @@ export default function PortalPage() {
         })}
       </div>
 
+      {/* Filter, Search & Sort Control Bar */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="w-full md:w-72">
+          <input
+            type="text"
+            placeholder="Search by title, agency, or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3.5 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto">
+          {["All", ...STAGES].map((stage) => (
+            <button
+              key={stage}
+              onClick={() => setSelectedStageFilter(stage)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                selectedStageFilter === stage
+                  ? "bg-emerald-600 text-white shadow-sm"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+              }`}
+            >
+              {stage} {stage !== "All" ? `(${bids.filter((b) => b.status === stage).length})` : `(${bids.length})`}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <span className="text-xs text-slate-400 font-semibold whitespace-nowrap">Sort by:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "urgency" | "fitScore" | "value")}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none"
+          >
+            <option value="urgency">Submission Deadline</option>
+            <option value="fitScore">Fit Score (High to Low)</option>
+            <option value="value">Est. Value (High to Low)</option>
+          </select>
+        </div>
+      </div>
+
       {/* Kanban Board View */}
       {viewMode === "kanban" ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {STAGES.map((stage) => {
-            const stageBids = bids.filter((b) => b.status === stage);
+            const stageBids = filteredBids.filter((b) => b.status === stage);
             return (
               <div
                 key={stage}
@@ -181,7 +253,7 @@ export default function PortalPage() {
                 <div className="space-y-3 flex-1 overflow-y-auto">
                   {stageBids.length === 0 ? (
                     <div className="text-center py-10 text-xs text-slate-400 font-medium">
-                      No bids in {stage.toLowerCase()}
+                      No matching solicitations in {stage.toLowerCase()}
                     </div>
                   ) : (
                     stageBids.map((bid) => {
@@ -212,7 +284,6 @@ export default function PortalPage() {
                             <span className="font-bold text-slate-800 dark:text-slate-200">{bid.estimatedValue}</span>
                           </div>
 
-                          {/* Move Stage Selector & Action */}
                           <div className="flex items-center justify-between gap-2 pt-2">
                             <Link
                               href={`/fit-score?bidId=${bid.id}`}
@@ -258,38 +329,46 @@ export default function PortalPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {bids.map((bid) => {
-                const urgency = getDeadlineUrgency(bid.dueDate);
-                return (
-                  <tr key={bid.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">{bid.id}</td>
-                    <td className="p-4">
-                      <div className="font-bold text-slate-900 dark:text-white">{bid.title}</div>
-                      <div className="text-[11px] text-slate-500">{bid.agency}</div>
-                    </td>
-                    <td className="p-4 font-black">{bid.fitScore}/100</td>
-                    <td className="p-4">
-                      <span className="font-bold text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {bid.status}
-                      </span>
-                    </td>
-                    <td className="p-4 font-bold">{bid.estimatedValue}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-0.5 rounded text-[10px] ${urgency.badgeClass}`}>
-                        {urgency.label}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <Link
-                        href={`/fit-score?bidId=${bid.id}`}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
-                      >
-                        Evaluate &rarr;
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredBids.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    No matching bids found.
+                  </td>
+                </tr>
+              ) : (
+                filteredBids.map((bid) => {
+                  const urgency = getDeadlineUrgency(bid.dueDate);
+                  return (
+                    <tr key={bid.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">{bid.id}</td>
+                      <td className="p-4">
+                        <div className="font-bold text-slate-900 dark:text-white">{bid.title}</div>
+                        <div className="text-[11px] text-slate-500">{bid.agency}</div>
+                      </td>
+                      <td className="p-4 font-black">{bid.fitScore}/100</td>
+                      <td className="p-4">
+                        <span className="font-bold text-xs px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {bid.status}
+                        </span>
+                      </td>
+                      <td className="p-4 font-bold">{bid.estimatedValue}</td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] ${urgency.badgeClass}`}>
+                          {urgency.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <Link
+                          href={`/fit-score?bidId=${bid.id}`}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
+                        >
+                          Evaluate &rarr;
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
