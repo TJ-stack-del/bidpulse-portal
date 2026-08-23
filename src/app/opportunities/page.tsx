@@ -1,13 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
 
 interface Solicitation {
   id: string;
@@ -82,18 +79,21 @@ export default function OpportunitiesPage() {
   const [requestedTitles, setRequestedTitles] = useState<string[]>([]);
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  // Load existing requests for the logged in user
   const loadExistingRequests = async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
 
-    const { data } = await supabase
-      .from('proposal_requests')
-      .select('solicitation_title')
-      .eq('user_id', userData.user.id);
+      const { data } = await supabase
+        .from('proposal_requests')
+        .select('solicitation_title')
+        .eq('user_id', userData.user.id);
 
-    if (data) {
-      setRequestedTitles(data.map(d => d.solicitation_title));
+      if (data) {
+        setRequestedTitles(data.map(d => d.solicitation_title));
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -105,41 +105,28 @@ export default function OpportunitiesPage() {
     setSubmittingId(sol.id);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      
-      const userId = userData?.user?.id || '00000000-0000-0000-0000-000000000000';
-      const userEmail = userData?.user?.email || 'contractor@bidpulse.local';
 
-      const payload = {
-        metadata: {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           solicitationTitle: sol.title,
           issuingAgency: sol.agency,
           trade: sol.trade,
           refNumber: sol.ref_number,
-          estValue: sol.estimated_value
-        },
-        contractor: {
-          legalName: userData?.user?.user_metadata?.company_name || 'First Coast Grounds LLC',
-          email: userEmail
-        }
-      };
+          userId: userData?.user?.id || '',
+          userEmail: userData?.user?.email || 'contractor@bidpulse.local'
+        })
+      });
 
-      const { error } = await supabase
-        .from('proposal_requests')
-        .insert({
-          user_id: userId,
-          solicitation_title: sol.title,
-          issuing_agency: sol.agency,
-          status: 'Requested',
-          current_step_index: 0,
-          raw_payload: payload
-        });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to initialize payment gateway');
 
-      if (error) throw error;
-
-      setRequestedTitles(prev => [...prev, sol.title]);
-      router.push('/dashboard/proposals');
+      if (data.url) {
+        window.location.href = data.url;
+      }
     } catch (err: any) {
-      alert(`Request notice: ${err.message}`);
+      alert(`Payment notice: ${err.message}`);
     } finally {
       setSubmittingId(null);
     }
@@ -207,7 +194,7 @@ export default function OpportunitiesPage() {
 
                 {isAlreadyRequested ? (
                   <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
-                    ✓ Requested
+                    ✓ Funded & Queued
                   </span>
                 ) : (
                   <button
@@ -215,7 +202,7 @@ export default function OpportunitiesPage() {
                     disabled={submittingId === sol.id}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-md transition disabled:opacity-50"
                   >
-                    {submittingId === sol.id ? 'Ordering...' : 'Request Assembly ($495)'}
+                    {submittingId === sol.id ? 'Redirecting...' : 'Request Assembly ($495)'}
                   </button>
                 )}
               </div>
