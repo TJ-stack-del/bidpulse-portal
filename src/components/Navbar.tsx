@@ -1,74 +1,125 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BrandLogo } from './BrandLogo';
+import { usePathname } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
+import { useTheme } from './ThemeProvider';
 
-export const Navbar = ({ userEmail = 'michael@test.com', isAdmin = true }: { userEmail?: string; isAdmin?: boolean }) => {
-  const [isDark, setIsDark] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const ADMIN_EMAILS = ['admin@bidpulse.com'];
+
+export default function Navbar() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const { theme, toggleTheme } = useTheme();
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   useEffect(() => {
-    if (document.documentElement.classList.contains('dark')) {
-      setIsDark(true);
-    }
-  }, []);
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user || null);
+      setLoading(false);
+    };
+    checkSession();
 
-  const toggleTheme = () => {
-    if (isDark) {
-      document.documentElement.classList.remove('dark');
-      setIsDark(false);
-    } else {
-      document.documentElement.classList.add('dark');
-      setIsDark(true);
-    }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    window.location.href = '/login';
   };
 
-  const closeMenu = () => setMobileMenuOpen(false);
+  const isActive = (path: string) => pathname === path;
+  const isAdmin = user && ADMIN_EMAILS.includes(user.email);
 
   return (
-    <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors duration-200">
+    <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand & Desktop Navigation */}
+        
         <div className="flex items-center gap-8">
-          <BrandLogo />
-          
-          <nav className="hidden md:flex items-center gap-5 text-sm font-medium">
-            <Link href="/opportunities" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
-              RFP Opportunities
-            </Link>
-            <Link href="/dashboard/proposals" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
-              My Proposals
+          {/* Brand Logo with Shield Icon */}
+          <Link className="flex items-center gap-2.5 h-8" href="/">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-8 w-auto text-blue-500 shrink-0">
+              <path d="M50 8L88 22V50C88 74 50 92 50 92C50 92 12 74 12 50V22L50 8Z" stroke="#2563EB" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" className="stroke-blue-500 fill-blue-950/20"></path>
+              <path d="M20 50H36L44 32L54 68L64 42L72 50H80" stroke="#38BDF8" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"></path>
+            </svg>
+            <span className="font-extrabold tracking-tight text-xl text-slate-900 dark:text-white font-sans">
+              Bid<span className="text-blue-500">Pulse</span>
+            </span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
+            <Link
+              href="/opportunities"
+              className={`px-3 py-1.5 rounded-lg transition text-xs font-semibold ${
+                isActive('/opportunities')
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-900'
+              }`}
+            >
+              Browse RFPs
             </Link>
 
-            {isAdmin && (
-              <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800">
-                <span className="bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+            {!loading && user && (
+              <Link
+                href="/dashboard/proposals"
+                className={`px-3 py-1.5 rounded-lg transition text-xs font-semibold ${
+                  isActive('/dashboard/proposals')
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-900'
+                }`}
+              >
+                My Proposal Binders
+              </Link>
+            )}
+
+            {!loading && isAdmin && (
+              <div className="flex items-center gap-1 ml-4 pl-4 border-l border-slate-200 dark:border-slate-800">
+                <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mr-1">
                   Admin
                 </span>
-                <Link href="/admin/opportunities" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-xs font-semibold">
-                  Manage RFPs
+                <Link
+                  href="/admin/opportunities"
+                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
+                  RFPs
                 </Link>
-                <Link href="/admin/fulfillment" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-xs font-semibold">
+                <Link
+                  href="/admin/fulfillment"
+                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
                   Fulfillment
                 </Link>
-                <Link href="/admin/users" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition text-xs font-semibold">
-                  Manage Users
+                <Link
+                  href="/admin/users"
+                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
+                  Users
                 </Link>
               </div>
             )}
           </nav>
         </div>
 
-        {/* Right Actions & Mobile Hamburger */}
-        <div className="flex items-center gap-2 sm:gap-3 text-xs">
-          {/* Light / Dark Mode Toggle */}
+        {/* Right Section: Theme Toggle & Auth */}
+        <div className="flex items-center gap-3">
           <button
             onClick={toggleTheme}
             aria-label="Toggle Theme"
-            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition"
+            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer border border-slate-200 dark:border-slate-800"
           >
-            {isDark ? (
+            {theme === 'dark' ? (
               <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
@@ -79,108 +130,32 @@ export const Navbar = ({ userEmail = 'michael@test.com', isAdmin = true }: { use
             )}
           </button>
 
-          {/* User Badge (hidden on smallest screens to preserve layout) */}
-          <div className="hidden sm:flex items-center gap-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-full text-slate-700 dark:text-slate-300">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-mono">{userEmail}</span>
-          </div>
-
-          <button className="hidden sm:inline-block bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-300 px-3 py-1.5 rounded transition font-medium">
-            Sign Out
-          </button>
-
-          {/* Mobile Menu Hamburger Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Open Navigation Menu"
-            className="md:hidden p-2 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 focus:outline-none"
-          >
-            {mobileMenuOpen ? (
-              // Close Icon (X)
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              // Hamburger Icon
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Navigation Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pt-3 pb-5 space-y-3 shadow-2xl">
-          {/* User Account Info on Mobile */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 text-xs">
-            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-              <span className="font-mono">{userEmail}</span>
-            </div>
-            <button className="text-rose-500 font-semibold hover:underline">
-              Sign Out
-            </button>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-2 py-1">
-              General
-            </div>
-            <Link
-              href="/opportunities"
-              onClick={closeMenu}
-              className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition"
-            >
-              RFP Opportunities
-            </Link>
-            <Link
-              href="/dashboard/proposals"
-              onClick={closeMenu}
-              className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition"
-            >
-              My Proposals
-            </Link>
-          </div>
-
-          {isAdmin && (
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
-              <div className="flex items-center gap-2 px-2 py-1">
-                <span className="bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider">
-                  Admin
-                </span>
-                <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">
-                  Operations
-                </span>
+          {!loading && user ? (
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex items-center gap-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1 rounded-full text-xs text-slate-700 dark:text-slate-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="font-mono text-[11px] truncate max-w-[160px]">{user.email}</span>
               </div>
-              <Link
-                href="/admin/opportunities"
-                onClick={closeMenu}
-                className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition"
+              <button
+                onClick={handleSignOut}
+                className="bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700/80 text-xs font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
               >
-                Manage RFPs
-              </Link>
-              <Link
-                href="/admin/fulfillment"
-                onClick={closeMenu}
-                className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition"
-              >
-                Fulfillment Queue
-              </Link>
-              <Link
-                href="/admin/users"
-                onClick={closeMenu}
-                className="block px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 transition"
-              >
-                Manage Users
-              </Link>
+                Sign Out
+              </button>
             </div>
+          ) : !loading && !user ? (
+            <Link
+              href="/login"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md shadow-blue-600/20 transition"
+            >
+              Sign In
+            </Link>
+          ) : (
+            <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
           )}
         </div>
-      )}
+
+      </div>
     </header>
   );
-};
-
-export default Navbar;
+}
