@@ -1,13 +1,10 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-import Navbar from "./components/Navbar";
-
-const inter = Inter({ subsets: ["latin"] });
+import type { Metadata } from 'next';
+import './globals.css';
+import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: "BidPulse | Institutional Janitorial Procurement",
-  description: "Procurement intelligence and 100-point rubric scoring engine for facilities contracts.",
+  title: 'BidPulse Portal',
+  description: 'Government & Commercial RFP Deal Finder & Bid Concierge',
 };
 
 export default function RootLayout({
@@ -16,13 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        suppressHydrationWarning
-        className={`${inter.className} bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 flex flex-col`}
-      >
+    <html lang="en" className="antialiased">
+      <body className="min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100">
         <Navbar />
-        <div className="flex-1">{children}</div>
+        <main>{children}</main>
       </body>
     </html>
   );
