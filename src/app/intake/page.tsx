@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabaseClient';
 export default function IntakePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState(1);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const [formData, setFormData] = useState({
     legalName: '',
@@ -27,18 +27,39 @@ export default function IntakePage() {
   });
 
   useEffect(() => {
-    async function loadUser() {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) {
+    async function loadSavedProfile() {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        if (!authData?.user) return;
+
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+
         setFormData(prev => ({
           ...prev,
-          contactEmail: data.user.email || prev.contactEmail,
-          legalName: data.user.user_metadata?.company_name || prev.legalName,
-          contactName: data.user.user_metadata?.full_name || prev.contactName
+          contactEmail: authData.user.email || prev.contactEmail,
+          legalName: prof?.company_name || authData.user.user_metadata?.company_name || prev.legalName,
+          contactName: prof?.full_name || authData.user.user_metadata?.full_name || prev.contactName,
+          fein: prof?.fein || prev.fein,
+          sunbizNumber: prof?.sunbiz_number || prev.sunbizNumber,
+          licenseNumber: prof?.license_number || prev.licenseNumber,
+          primaryTrade: prof?.primary_trade || prev.primaryTrade,
+          contactPhone: prof?.phone || prev.contactPhone,
+          insuranceCoverage: prof?.insurance_coverage || prev.insuranceCoverage,
+          bondingCapacity: prof?.bonding_capacity || prev.bondingCapacity
         }));
+
+        if (prof?.company_name) {
+          setProfileLoaded(true);
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
-    loadUser();
+    loadSavedProfile();
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -69,8 +90,8 @@ export default function IntakePage() {
         metadata: {
           solicitationTitle: formData.selectedSolicitation,
           trade: formData.primaryTrade,
-          issuingAgency: 'City of Jacksonville / Duval County Public Facilities',
-          refNumber: 'RFP-0132-26'
+          issuingAgency: 'Duval County Public Procurement',
+          refNumber: 'RFP-2026'
         }
       };
 
@@ -79,7 +100,7 @@ export default function IntakePage() {
         .insert({
           user_id: userId,
           solicitation_title: formData.selectedSolicitation,
-          issuing_agency: 'City of Jacksonville / Duval County Public Facilities',
+          issuing_agency: 'Duval County Public Procurement',
           status: 'Requested',
           current_step_index: 0,
           raw_payload: payload
@@ -89,7 +110,7 @@ export default function IntakePage() {
 
       router.push('/dashboard/proposals');
     } catch (err: any) {
-      alert(`Submission note: ${err.message}`);
+      alert(`Submission notice: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -98,13 +119,25 @@ export default function IntakePage() {
   return (
     <div className="max-w-4xl mx-auto p-6 md:p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Contractor Intake & Profile Onboarding</h1>
-        <p className="text-slate-500 dark:text-slate-400 text-sm">Provide your statutory entity details to populate Tabs 1–5 of your turnkey proposal binders.</p>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          Turnkey Proposal Request
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">
+          Verify your entity parameters to compile the customized 5-tab proposal packet.
+        </p>
+
+        {profileLoaded && (
+          <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-lg border border-emerald-500/20">
+            ✓ Auto-filled from your Contractor Entity Profile
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 md:p-8 shadow-xl space-y-6">
-        <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Tab 1: Entity & Compliance Credentials</h2>
+        <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            Contractor Entity Information
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -115,15 +148,13 @@ export default function IntakePage() {
               name="legalName"
               value={formData.legalName}
               onChange={handleChange}
-              placeholder="e.g. First Coast Grounds LLC"
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500" 
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Federal Employer ID (FEIN / EIN)</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">FEIN / Tax ID</label>
             <input 
-              required 
               name="fein"
               value={formData.fein}
               onChange={handleChange}
@@ -133,29 +164,27 @@ export default function IntakePage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Florida Sunbiz Document #</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Florida Sunbiz #</label>
             <input 
               name="sunbizNumber"
               value={formData.sunbizNumber}
               onChange={handleChange}
-              placeholder="e.g. L24000123456"
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500" 
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Trade License / Certification #</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Trade License / Cert #</label>
             <input 
               name="licenseNumber"
               value={formData.licenseNumber}
               onChange={handleChange}
-              placeholder="e.g. CBC-1234567"
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500" 
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Primary Trade Category</label>
+            <label className="block text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 mb-1">Primary Trade Domain</label>
             <select 
               name="primaryTrade"
               value={formData.primaryTrade}
@@ -184,9 +213,9 @@ export default function IntakePage() {
           <button 
             type="submit" 
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm px-6 py-2.5 rounded-lg shadow-md transition disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-6 py-2.5 rounded-lg shadow-md transition disabled:opacity-50"
           >
-            {loading ? 'Submitting Intake...' : 'Save & Submit Proposal Request'}
+            {loading ? 'Submitting...' : 'Submit & Compile Binder'}
           </button>
         </div>
       </form>
