@@ -1,12 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminFulfillmentPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -15,20 +10,25 @@ export default function AdminFulfillmentPage() {
 
   const fetchRequests = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('proposal_requests')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data) {
-      setRequests(data);
-      const statuses: any = {};
-      data.forEach((r) => {
-        statuses[r.id] = r.status || 'Requested';
-      });
-      setEditingStatuses(statuses);
+    try {
+      const { data } = await supabase
+        .from('proposal_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (data) {
+        setRequests(data);
+        const statuses: any = {};
+        data.forEach((r) => {
+          statuses[r.id] = r.status || 'Requested';
+        });
+        setEditingStatuses(statuses);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {

@@ -1,12 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
+import { supabase } from '@/lib/supabaseClient';
 
 export default function MyProposalsPage() {
   const [proposals, setProposals] = useState<any[]>([]);
@@ -14,16 +9,19 @@ export default function MyProposalsPage() {
 
   const fetchProposals = async () => {
     setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    
-    let query = supabase.from('proposal_requests').select('*').order('created_at', { ascending: false });
-    if (userData?.user) {
-      query = query.eq('user_id', userData.user.id);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      let query = supabase.from('proposal_requests').select('*').order('created_at', { ascending: false });
+      if (userData?.user) {
+        query = query.eq('user_id', userData.user.id);
+      }
+      const { data } = await query;
+      if (data) setProposals(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-    
-    const { data } = await query;
-    if (data) setProposals(data);
-    setLoading(false);
   };
 
   useEffect(() => {
