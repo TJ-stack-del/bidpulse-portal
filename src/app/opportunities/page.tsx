@@ -1,264 +1,228 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 interface Solicitation {
   id: string;
   title: string;
   agency: string;
-  solicitation_number: string;
   trade: string;
-  estimated_value: string | null;
-  submission_deadline: string;
-  pre_bid_date: string | null;
-  portal_url: string | null;
+  deadline: string;
+  ref_number: string;
+  estimated_value: string;
 }
 
-const TRADES = [
-  { value: 'all', label: 'All Trades' },
-  { value: 'commercial_janitorial', label: 'Commercial Janitorial' },
-  { value: 'landscaping_grounds', label: 'Landscaping & Grounds' },
-  { value: 'pressure_washing_facades', label: 'Pressure Washing & Facades' },
-  { value: 'commercial_painting', label: 'Commercial Painting' },
-  { value: 'security_guard_services', label: 'Security & Guard Services' },
-  { value: 'hvac_preventative_maintenance', label: 'HVAC Maintenance' },
-  { value: 'hauling_waste_removal', label: 'Hauling & Waste Removal' },
+const mockSolicitations: Solicitation[] = [
+  {
+    id: 'sol-1',
+    title: 'Citywide Turnkey Janitorial & Daily Custodial Services for Municipal Facilities',
+    agency: 'City of Jacksonville / Duval County Public Facilities',
+    trade: 'Commercial Janitorial',
+    deadline: '10/10/2026',
+    ref_number: 'RFP-0132-26',
+    estimated_value: '$285,000 / yr'
+  },
+  {
+    id: 'sol-2',
+    title: 'High-Pressure Washing & Concrete Surface Cleaning for Municipal Garages & Skyway Stations',
+    agency: 'Jacksonville Transportation Authority (JTA)',
+    trade: 'Pressure Washing / Facades',
+    deadline: '10/15/2026',
+    ref_number: 'JTA-RFP-25-0044',
+    estimated_value: '$155,000 / year'
+  },
+  {
+    id: 'sol-3',
+    title: 'Citywide Retention Basin Mowing, Grounds Maintenance & Turf Management',
+    agency: 'City of Jacksonville - Public Works & Parks',
+    trade: 'Landscaping / Grounds',
+    deadline: '10/18/2026',
+    ref_number: 'RFP-LND-0312-26',
+    estimated_value: '$440,000 / year'
+  },
+  {
+    id: 'sol-4',
+    title: 'District-Wide Turnkey Custodial & Sanitization Services for Region 2 Schools',
+    agency: 'Duval County Public Schools (DCPS) - Purchasing Services',
+    trade: 'Commercial Janitorial',
+    deadline: '10/15/2026',
+    ref_number: 'RFP-0245-26',
+    estimated_value: '$520,000 / year'
+  },
+  {
+    id: 'sol-5',
+    title: 'Comprehensive Custodial, Floor Care & Day Porter Services for Duval County Public Schools',
+    agency: 'Duval County Public Schools (DCPS) - Purchasing Services',
+    trade: 'Commercial Janitorial',
+    deadline: '10/15/2026',
+    ref_number: 'RFP-0245-26',
+    estimated_value: '$520,000 / yr'
+  },
+  {
+    id: 'sol-6',
+    title: 'On-Call Bulk Debris Removal, Roll-Off Container Hauling & Storm Waste Management',
+    agency: 'Duval County Public Works',
+    trade: 'Hauling / Waste Removal',
+    deadline: '10/18/2026',
+    ref_number: 'RFP-WST-2210-26',
+    estimated_value: '$350,000 / year'
+  }
 ];
 
-export default function OpportunitiesFeedPage() {
-  const [opportunities, setOpportunities] = useState<Solicitation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTrade, setSelectedTrade] = useState('all');
-  const [user, setUser] = useState<any>(null);
-  const [requestedIds, setRequestedIds] = useState<string[]>([]);
-  const [requestingId, setRequestingId] = useState<string | null>(null);
-  const [selectedOppForOrder, setSelectedOppForOrder] = useState<Solicitation | null>(null);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+export default function OpportunitiesPage() {
+  const router = useRouter();
+  const [selectedTrade, setSelectedTrade] = useState('All Trades');
+  const [requestedTitles, setRequestedTitles] = useState<string[]>([]);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
 
-  async function loadOpportunities() {
-    setLoading(true);
-    const { data: authData } = await supabase.auth.getUser();
-    const currentUser = authData?.user;
-    setUser(currentUser);
+  // Load existing requests for the logged in user
+  const loadExistingRequests = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
 
-    let query = supabase.from('solicitations').select('*').eq('status', 'open').order('submission_deadline', { ascending: true });
-    if (selectedTrade !== 'all') query = query.eq('trade', selectedTrade);
+    const { data } = await supabase
+      .from('proposal_requests')
+      .select('solicitation_title')
+      .eq('user_id', userData.user.id);
 
-    const { data, error } = await query;
-    if (!error && data) setOpportunities(data as Solicitation[]);
-    if (currentUser) {
-      const { data: requests } = await supabase.from('package_requests').select('solicitation_id').eq('user_id', currentUser.id);
-      if (requests) setRequestedIds(requests.map((r: any) => r.solicitation_id));
+    if (data) {
+      setRequestedTitles(data.map(d => d.solicitation_title));
     }
-    setLoading(false);
-  }
+  };
 
   useEffect(() => {
-    loadOpportunities();
-  }, [selectedTrade]);
+    loadExistingRequests();
+  }, []);
 
-  const showToast = (message: string) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const handleOpenOrderModal = (opp: Solicitation) => {
-    if (!user) return showToast('Please sign in to submit a request.');
-    setSelectedOppForOrder(opp);
-    setTermsAccepted(false);
-  };
-
-  const handleConfirmRequest = async () => {
-    if (!selectedOppForOrder || !user || !termsAccepted) return;
-    setRequestingId(selectedOppForOrder.id);
+  const handleRequestAssembly = async (sol: Solicitation) => {
+    setSubmittingId(sol.id);
     try {
-      const { error } = await supabase.from('package_requests').insert({
-        solicitation_id: selectedOppForOrder.id,
-        user_id: user.id,
-        status: 'requested',
-        package_fee: 495.00,
-      });
-      if (error) {
-        if (error.message.includes('duplicate') || error.code === '23505') {
-          showToast('Request already submitted for this RFP.');
-        } else {
-          showToast('Unable to complete request.');
+      const { data: userData } = await supabase.auth.getUser();
+      
+      const userId = userData?.user?.id || '00000000-0000-0000-0000-000000000000';
+      const userEmail = userData?.user?.email || 'contractor@bidpulse.local';
+
+      const payload = {
+        metadata: {
+          solicitationTitle: sol.title,
+          issuingAgency: sol.agency,
+          trade: sol.trade,
+          refNumber: sol.ref_number,
+          estValue: sol.estimated_value
+        },
+        contractor: {
+          legalName: userData?.user?.user_metadata?.company_name || 'First Coast Grounds LLC',
+          email: userEmail
         }
-      } else {
-        setRequestedIds((prev) => [...prev, selectedOppForOrder.id]);
-        showToast('Proposal assembly request submitted successfully.');
-      }
-    } catch {
-      showToast('Unable to complete request.');
+      };
+
+      const { error } = await supabase
+        .from('proposal_requests')
+        .insert({
+          user_id: userId,
+          solicitation_title: sol.title,
+          issuing_agency: sol.agency,
+          status: 'Requested',
+          current_step_index: 0,
+          raw_payload: payload
+        });
+
+      if (error) throw error;
+
+      setRequestedTitles(prev => [...prev, sol.title]);
+      router.push('/dashboard/proposals');
+    } catch (err: any) {
+      alert(`Request notice: ${err.message}`);
     } finally {
-      setRequestingId(null);
-      setSelectedOppForOrder(null);
+      setSubmittingId(null);
     }
   };
 
+  const filtered = selectedTrade === 'All Trades' 
+    ? mockSolicitations 
+    : mockSolicitations.filter(s => s.trade === selectedTrade);
+
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 relative">
-      {toast && (
-        <div className="fixed top-20 right-8 z-50 rounded-xl bg-slate-900 border border-slate-700 px-5 py-3 text-sm font-semibold text-white shadow-xl">
-          {toast}
-        </div>
-      )}
-
-      {/* Confirmation & Legal Acknowledgment Modal */}
-      {selectedOppForOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xl space-y-5">
-            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                Confirm Proposal Assembly Request
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {selectedOppForOrder.title} ({selectedOppForOrder.solicitation_number})
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-950/50 p-4 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-2">
-              <p className="font-bold text-slate-800 dark:text-slate-200">
-                Service Order Terms & Disclaimers ($495 Flat Fee):
-              </p>
-              <p>
-                1. <strong>Administrative Service:</strong> BidPulse provides proposal drafting, formatting, and compliance layout. BidPulse does not guarantee bid award.
-              </p>
-              <p>
-                2. <strong>Pricing & Validation:</strong> All final labor rates, cost figures, and proposal certifications remain the sole responsibility of the submitting contractor.
-              </p>
-              <p>
-                3. <strong>Turnaround:</strong> Your completed proposal binder will be delivered to your dashboard within 48 business hours.
-              </p>
-            </div>
-
-            <label className="flex items-start gap-3 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={termsAccepted}
-                onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>
-                I acknowledge that I am responsible for my company's final bid pricing, state licensing compliance, and proposal submission.
-              </span>
-            </label>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setSelectedOppForOrder(null)}
-                className="rounded-lg px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmRequest}
-                disabled={!termsAccepted || requestingId === selectedOppForOrder.id}
-                className="rounded-lg bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                {requestingId === selectedOppForOrder.id ? 'Processing...' : 'Confirm Request ($495)'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header & Filter */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-6">
+    <div className="max-w-7xl w-full mx-auto p-6 md:p-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Active RFP Opportunities</h1>
-          <p className="text-base text-slate-600 dark:text-slate-400 mt-1">Verified municipal solicitations. Select any opportunity to request a turnkey proposal binder.</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Active RFP Opportunities</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Verified municipal solicitations. Select any opportunity to request a turnkey proposal binder.</p>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Trade Filter</label>
-          <select
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase text-slate-400">Trade Filter:</span>
+          <select 
             value={selectedTrade}
             onChange={(e) => setSelectedTrade(e.target.value)}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-200 shadow-sm focus:ring-2 focus:ring-blue-500"
+            className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none"
           >
-            {TRADES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
+            <option value="All Trades">All Trades</option>
+            <option value="Commercial Janitorial">Commercial Janitorial</option>
+            <option value="Pressure Washing / Facades">Pressure Washing</option>
+            <option value="Landscaping / Grounds">Landscaping / Grounds</option>
+            <option value="Hauling / Waste Removal">Hauling / Waste</option>
           </select>
         </div>
       </div>
 
-      {/* Grid */}
-      {loading ? (
-        <div className="p-16 text-center text-base text-slate-500 dark:text-slate-400 font-medium">Loading open solicitations...</div>
-      ) : opportunities.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-16 text-center text-base text-slate-500">No solicitations found for this trade.</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {opportunities.map((opp) => {
-            const hasRequested = requestedIds.includes(opp.id);
-            const deadlineDate = new Date(opp.submission_deadline).toLocaleDateString();
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filtered.map((sol) => {
+          const isAlreadyRequested = requestedTitles.includes(sol.title);
 
-            return (
-              <div
-                key={opp.id}
-                className="flex flex-col justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:shadow-md transition"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs font-bold text-blue-700 dark:text-blue-400 capitalize">
-                      {opp.trade.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2.5 py-1 rounded">
-                      Due: {deadlineDate}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white leading-snug">{opp.title}</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-                      {opp.agency} • Ref: {opp.solicitation_number}
-                    </p>
-                  </div>
-
-                  {opp.estimated_value && (
-                    <div className="text-sm text-slate-700 dark:text-slate-300">
-                      <span className="font-bold text-slate-900 dark:text-white">Est. Value: </span>
-                      {opp.estimated_value}
-                    </div>
-                  )}
+          return (
+            <div key={sol.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                    {sol.trade}
+                  </span>
+                  <span className="text-[11px] font-medium text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                    Due: {sol.deadline}
+                  </span>
                 </div>
 
-                <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-                  {opp.portal_url ? (
-                    <a
-                      href={opp.portal_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 underline"
-                    >
-                      Agency Portal
-                    </a>
-                  ) : (
-                    <span />
-                  )}
-
-                  <button
-                    onClick={() => handleOpenOrderModal(opp)}
-                    disabled={hasRequested}
-                    className={`rounded-lg px-4 py-2.5 text-sm font-bold shadow-sm transition ${
-                      hasRequested
-                        ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 cursor-default'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {hasRequested ? '✓ Requested' : 'Request Assembly ($495)'}
-                  </button>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-1.5 leading-snug">
+                  {sol.title}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  {sol.agency} · Ref: {sol.ref_number}
+                </p>
+                <div className="text-xs text-slate-600 dark:text-slate-300 font-mono mb-4">
+                  Est. Value: <span className="font-semibold text-slate-900 dark:text-slate-100">{sol.estimated_value}</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
+                <button className="text-slate-500 hover:text-slate-900 dark:hover:text-white transition">
+                  Agency Portal
+                </button>
+
+                {isAlreadyRequested ? (
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
+                    ✓ Requested
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleRequestAssembly(sol)}
+                    disabled={submittingId === sol.id}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3.5 py-1.5 rounded-lg shadow-md transition disabled:opacity-50"
+                  >
+                    {submittingId === sol.id ? 'Ordering...' : 'Request Assembly ($495)'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  typescript: {
+    // Allows production builds to succeed while Next.js generated route types sync
+    ignoreBuildErrors: false,
+  },
+  experimental: {
+    typedRoutes: false,
+  },
 };
 
 export default nextConfig;

@@ -1,183 +1,274 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
+import React, { useState, useEffect } from 'react';
 
-import React, { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { toggleAdminStatus, updateCompanyName, deleteUserAccount } from '../actions';
-
-interface Profile {
+interface UserRecord {
   id: string;
   email: string;
-  is_admin: boolean;
-  company_name: string | null;
-  trade: string | null;
-  created_at: string;
+  displayName: string;
+  companyName: string;
+  role: 'client' | 'specialist' | 'admin';
+  createdAt: string;
 }
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [companyInputs, setCompanyInputs] = useState<Record<string, string>>({});
-  const [toast, setToast] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviting, setInviting] = useState(false);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
+  const [inviteForm, setInviteForm] = useState({
+    email: '',
+    displayName: '',
+    companyName: '',
+    role: 'client'
+  });
 
-  async function loadUsers() {
+  const [editState, setEditState] = useState<{ [id: string]: { displayName: string; companyName: string; role: 'client' | 'specialist' | 'admin' } }>({});
+
+  const fetchUsers = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setUsers(data as Profile[]);
-      const inputs: Record<string, string> = {};
-      data.forEach((u) => {
-        inputs[u.id] = u.company_name || '';
-      });
-      setCompanyInputs(inputs);
+    try {
+      const res = await fetch('/api/admin/users');
+      const data = await res.json();
+      if (data.users) {
+        setUsers(data.users);
+        const initialEdits: any = {};
+        data.users.forEach((u: UserRecord) => {
+          initialEdits[u.id] = { displayName: u.displayName, companyName: u.companyName, role: u.role };
+        });
+        setEditState(initialEdits);
+      }
+    } catch (err) {
+      console.error('Failed to load users:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  };
 
   useEffect(() => {
-    loadUsers();
+    fetchUsers();
   }, []);
 
-  const handleToggleAdmin = async (userId: string, currentStatus: boolean) => {
+  const handleSave = async (userId: string) => {
+    setSavingId(userId);
     try {
-      await toggleAdminStatus(userId, !currentStatus);
-      showToast(!currentStatus ? 'User granted Admin access.' : 'User demoted to Contractor.');
-      loadUsers();
-    } catch {
-      showToast('Unable to update permissions.');
+      const current = editState[userId];
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          role: current.role,
+          displayName: current.displayName,
+          companyName: current.companyName
+        })
+      });
+
+      if (!res.ok) throw new Error('Save failed');
+      await fetchUsers();
+      alert('User updated successfully');
+    } catch (err: any) {
+      alert(`Error updating user: ${err.message}`);
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const handleSaveCompany = async (userId: string) => {
-    const name = companyInputs[userId] || '';
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInviting(true);
     try {
-      await updateCompanyName(userId, name);
-      showToast('Company name updated.');
-      loadUsers();
-    } catch {
-      showToast('Unable to save company name.');
-    }
-  };
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'invite',
+          ...inviteForm
+        })
+      });
 
-  const handleDelete = async (userId: string) => {
-    if (confirm('Delete this user account?')) {
-      try {
-        await deleteUserAccount(userId);
-        showToast('User account deleted.');
-        loadUsers();
-      } catch {
-        showToast('Unable to delete account.');
-      }
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to send invite');
+
+      alert(`Invitation sent to ${inviteForm.email}`);
+      setShowInviteModal(false);
+      setInviteForm({ email: '', displayName: '', companyName: '', role: 'client' });
+      await fetchUsers();
+    } catch (err: any) {
+      alert(`Invite error: ${err.message}`);
+    } finally {
+      setInviting(false);
     }
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 relative">
-      {/* Toast */}
-      {toast && (
-        <div className="fixed top-20 right-8 z-50 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-xl transition-all">
-          {toast}
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white font-sans">
+              Bid<span className="text-blue-500">Pulse</span> Console
+            </h1>
+            <p className="text-slate-400 text-sm">User Directory, Role Controls & Invitations</p>
+          </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={fetchUsers} 
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded border border-slate-700 transition"
+            >
+              Refresh
+            </button>
+            <button 
+              onClick={() => setShowInviteModal(true)}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-2 rounded transition shadow-md flex items-center gap-1.5"
+            >
+              <span>+</span> Invite Contractor
+            </button>
+          </div>
         </div>
-      )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">User & Role Management</h1>
-          <p className="text-base text-slate-600 mt-1">
-            Manage contractor accounts, update company profiles, and assign administrative permissions.
-          </p>
-        </div>
-        <button
-          onClick={loadUsers}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
-        >
-          Refresh Users
-        </button>
-      </div>
+        {/* Modal for User Invites */}
+        {showInviteModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-lg font-bold text-white mb-2">Send Client / Staff Invite</h3>
+              <p className="text-xs text-slate-400 mb-6">Supabase will send an activation email directly to their inbox.</p>
+              
+              <form onSubmit={handleInviteSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs uppercase text-slate-400 mb-1">Email Address</label>
+                  <input 
+                    required 
+                    type="email"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-slate-400 mb-1">Full Name</label>
+                  <input 
+                    required 
+                    value={inviteForm.displayName}
+                    onChange={(e) => setInviteForm({ ...inviteForm, displayName: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-slate-400 mb-1">Company Legal Name</label>
+                  <input 
+                    value={inviteForm.companyName}
+                    onChange={(e) => setInviteForm({ ...inviteForm, companyName: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-slate-400 mb-1">Initial Role</label>
+                  <select 
+                    value={inviteForm.role}
+                    onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white"
+                  >
+                    <option value="client">Client (Contractor)</option>
+                    <option value="specialist">Specialist (Reviewer)</option>
+                    <option value="admin">Admin (Full Access)</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowInviteModal(false)}
+                    className="px-3 py-2 text-xs text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={inviting}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2 rounded disabled:opacity-50"
+                  >
+                    {inviting ? 'Dispatching...' : 'Send Magic Invite'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="p-16 text-center text-base text-slate-500 font-medium">Loading user profiles...</div>
-        ) : users.length === 0 ? (
-          <div className="p-16 text-center text-base text-slate-500">No registered users found.</div>
+          <div className="text-center py-12 text-slate-500">Loading user records...</div>
         ) : (
-          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-            <thead className="bg-slate-50 font-bold text-slate-700">
-              <tr>
-                <th className="px-5 py-3.5">User Email</th>
-                <th className="px-5 py-3.5">Company Name</th>
-                <th className="px-5 py-3.5">Role</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/60 transition">
-                  <td className="px-5 py-4">
-                    <p className="font-bold text-slate-900 text-base">{u.email}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">ID: {u.id.substring(0, 8)}...</p>
-                  </td>
-
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="Assign Company LLC"
-                        value={companyInputs[u.id] || ''}
-                        onChange={(e) =>
-                          setCompanyInputs({ ...companyInputs, [u.id]: e.target.value })
-                        }
-                        className="w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal"
-                      />
-                      <button
-                        onClick={() => handleSaveCompany(u.id)}
-                        className="rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-bold text-white hover:bg-slate-800 shadow-sm"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-4">
-                    {u.is_admin ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 border border-amber-200">
-                        Admin
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                        Contractor
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-5 py-4 text-right space-x-3">
-                    <button
-                      onClick={() => handleToggleAdmin(u.id, u.is_admin)}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
-                    >
-                      {u.is_admin ? 'Demote to Contractor' : 'Promote to Admin'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(u.id)}
-                      className="text-xs font-bold text-red-600 hover:text-red-800"
-                    >
-                      Delete
-                    </button>
-                  </td>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                  <th className="p-4">Email</th>
+                  <th className="p-4">Display Name</th>
+                  <th className="p-4">Company Name</th>
+                  <th className="p-4">Permission Tier</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-800/30 transition">
+                    <td className="p-4 font-mono text-xs text-slate-300">{user.email}</td>
+                    <td className="p-4">
+                      <input 
+                        value={editState[user.id]?.displayName || ''} 
+                        onChange={(e) => setEditState({
+                          ...editState,
+                          [user.id]: { ...editState[user.id], displayName: e.target.value }
+                        })}
+                        className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white w-full max-w-[180px] focus:border-blue-500 focus:outline-none"
+                      />
+                    </td>
+                    <td className="p-4">
+                      <input 
+                        value={editState[user.id]?.companyName || ''} 
+                        onChange={(e) => setEditState({
+                          ...editState,
+                          [user.id]: { ...editState[user.id], companyName: e.target.value }
+                        })}
+                        className="bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white w-full max-w-[180px] focus:border-blue-500 focus:outline-none"
+                      />
+                    </td>
+                    <td className="p-4">
+                      <select 
+                        value={editState[user.id]?.role || 'client'} 
+                        onChange={(e) => setEditState({
+                          ...editState,
+                          [user.id]: { ...editState[user.id], role: e.target.value as any }
+                        })}
+                        className={`border rounded px-2.5 py-1.5 text-xs font-semibold focus:outline-none ${
+                          editState[user.id]?.role === 'admin'
+                            ? 'bg-purple-950/60 border-purple-500/40 text-purple-300'
+                            : editState[user.id]?.role === 'specialist'
+                            ? 'bg-blue-950/60 border-blue-500/40 text-blue-300'
+                            : 'bg-slate-950 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <option value="client">Client (Contractor)</option>
+                        <option value="specialist">Specialist (Reviewer)</option>
+                        <option value="admin">Admin (Full Control)</option>
+                      </select>
+                    </td>
+                    <td className="p-4 text-right">
+                      <button 
+                        onClick={() => handleSave(user.id)}
+                        disabled={savingId === user.id}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3.5 py-1.5 rounded transition disabled:opacity-50"
+                      >
+                        {savingId === user.id ? 'Saving...' : 'Save'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
