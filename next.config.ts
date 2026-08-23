@@ -1,9 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  typedRoutes: true,
+  typedRoutes: false,
 };
 
-export default function(phase: string) {
-  return nextConfig;
-}
+export default nextConfig;

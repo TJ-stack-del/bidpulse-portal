@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Header() {
+  const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>('client');
@@ -28,16 +29,26 @@ export default function Header() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut({ scope: 'local' });
+      // Race the signOut against a 1.5s timeout so it never hangs the UI
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500))
+      ]);
     } catch (e) {
-      console.error(e);
+      console.warn('Signout network call skipped or timed out, clearing local state.');
     }
-    // Clear local storage items manually to guarantee session wipe
-    localStorage.clear();
-    sessionStorage.clear();
-    
-    // Force hard reload to login page to reset client memory state
-    window.location.href = '/login';
+
+    // Clear local cache storage
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (err) {
+      console.error(err);
+    }
+
+    // Use Next.js relative router navigation to avoid 404 port issues
+    router.push('/login');
+    router.refresh();
   };
 
   return (
