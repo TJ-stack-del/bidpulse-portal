@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic';
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  return createClient(url, key, {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  return createClient(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -16,96 +16,122 @@ function getAdminClient() {
 
 export async function GET() {
   try {
-    const supabaseAdmin = getAdminClient();
+    const supabase = getAdminClient();
 
-    // 1. Fetch user list from auth
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
     
-    // If service role is missing or auth admin fails, fall back to profiles table
-    if (userError || !userData?.users) {
-      const { data: fallbackProfiles, error: profileErr } = await supabaseAdmin
-        .from('profiles')
-        .select('*');
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (profileErr) {
-        return NextResponse.json({ users: [] });
-      }
-
-      const formatted = (fallbackProfiles || []).map(p => ({
-        id: p.id,
-        email: p.email || 'contractor@bidpulse.local',
-        displayName: p.full_name || 'Contractor User',
-        companyName: p.company_name || '—',
-        role: p.role || 'client',
-        createdAt: p.created_at || new Date().toISOString()
-      }));
-
-      return NextResponse.json({ users: formatted });
+    if (profilesError && authError) {
+      return NextResponse.json({ users: [] });
     }
 
-    // 2. Fetch profiles for role mapping
-    const { data: profiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id, role');
+    if (authData?.users && authData.users.length > 0) {
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-    const roleMap = new Map(profiles?.map(p => [p.id, p.role]) || []);
+      const userList = authData.users.map(u => {
+        const prof = profileMap.get(u.id);
+        return {
+          id: u.id,
+          email: u.email || 'No email',
+          displayName: u.user_metadata?.full_name || prof?.full_name || 'No Name Set',
+          companyName: u.user_metadata?.company_name || prof?.company_name || '—',
+          role: prof?.role || 'client',
+          createdAt: u.created_at
+        };
+      });
 
-    const userList = userData.users.map(u => ({
-      id: u.id,
-      email: u.email,
-      displayName: u.user_metadata?.full_name || u.user_metadata?.name || 'No Name Set',
-      companyName: u.user_metadata?.company_name || '—',
-      role: roleMap.get(u.id) || 'client',
-      createdAt: u.created_at
+      return NextResponse.json({ users: userList });
+    }
+
+    const fallbackList = (profiles || []).map(p => ({
+      id: p.id,
+      email: p.email || 'contractor@bidpulse.local',
+      displayName: p.full_name || p.display_name || 'Active User',
+      companyName: p.company_name || '—',
+      role: p.role || 'client',
+      createdAt: p.created_at || new Date().toISOString()
     }));
 
-    return NextResponse.json({ users: userList });
+    return NextResponse.json({ users: fallbackList });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error', users: [] }, { status: 200 });
+    return NextResponse.json({ error: err.message, users: [] }, { status: 200 });
   }
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const supabaseAdmin = getAdminClient();
+    const supabase = getAdminClient();
 
     if (body.action === 'invite') {
       const { email, role, displayName, companyName } = body;
 
-      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
         data: { full_name: displayName, company_name: companyName }
       });
 
       if (inviteError) throw inviteError;
 
       if (inviteData?.user) {
-        await supabaseAdmin.from('profiles').upsert({
+        await supabase.from('profiles').upsert({
           id: inviteData.user.id,
           email: inviteData.user.email,
-          role: role || 'client'
+          role: role || 'client',
+          full_name: displayName,
+          company_name: companyName
         });
       }
 
       return NextResponse.json({ success: true, message: 'Invite sent' });
     }
 
-    // Standard Profile/Role update
     const { userId, role, displayName, companyName } = body;
 
-    await supabaseAdmin
+    const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({ id: userId, role });
-
-    await supabaseAdmin.auth.admin.updateUserById(userId, {
-      user_metadata: {
+      .upsert({
+        id: userId,
+        role: role,
         full_name: displayName,
         company_name: companyName
-      }
-    });
+      });
+
+    if (profileError) throw profileError;
+
+    try {
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { full_name: displayName, company_name: companyName }
+      });
+    } catch (_) {}
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Update failed' }, { status: 400 });
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { userId } = await req.json();
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
+
+    const supabase = getAdminClient();
+
+    // 1. Delete associated profile record
+    await supabase.from('profiles').delete().eq('id', userId);
+
+    // 2. Delete user from auth engine
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(userId);
+    if (authDeleteError) throw authDeleteError;
+
+    return NextResponse.json({ success: true, message: 'User deleted successfully' });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Delete operation failed' }, { status: 500 });
   }
 }

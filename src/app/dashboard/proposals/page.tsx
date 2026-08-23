@@ -38,10 +38,10 @@ export default function MyProposalsPage() {
           <p className="text-slate-500 dark:text-slate-400 text-sm">Track your 5-tab turnkey proposal generation, review drafts, and download completed submissions.</p>
         </div>
         <a 
-          href="/intake"
+          href="/opportunities"
           className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md transition"
         >
-          + New Proposal Request
+          + Request New Proposal
         </a>
       </div>
 
@@ -50,8 +50,8 @@ export default function MyProposalsPage() {
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
               <th className="p-4">Solicitation / Agency</th>
-              <th className="p-4">Submission Status</th>
-              <th className="p-4">Turnkey Deliverable</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">5-Tab Proposal Packet</th>
               <th className="p-4 text-right">Actions</th>
             </tr>
           </thead>
@@ -63,7 +63,7 @@ export default function MyProposalsPage() {
                 <td colSpan={4} className="p-8 text-center text-slate-400">
                   You haven't requested any proposal binders yet. 
                   <div className="mt-2">
-                    <a href="/intake" className="text-blue-500 font-semibold hover:underline">Click here to start an intake packet</a>
+                    <a href="/opportunities" className="text-blue-500 font-semibold hover:underline">Explore Active RFP Solicitations</a>
                   </div>
                 </td>
               </tr>
@@ -80,27 +80,36 @@ export default function MyProposalsPage() {
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                         : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
                     }`}>
-                      {item.status}
+                      {item.status || 'Requested'}
                     </span>
                   </td>
-                  <td className="p-4 text-xs">
-                    {item.binder_url ? (
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
                       <a 
-                        href={item.binder_url} 
+                        href={`/api/proposals/download?id=${item.id}&inline=true`} 
                         target="_blank" 
                         rel="noreferrer"
-                        className="text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1"
+                        className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
                       >
-                        Download 5-Tab Binder (PDF) ↗
+                        <svg className="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Preview PDF ↗
                       </a>
-                    ) : (
-                      <span className="text-slate-400 italic">Compiling tabs 1-5...</span>
-                    )}
+                      <a 
+                        href={`/api/proposals/download?id=${item.id}`}
+                        className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download PDF
+                      </a>
+                    </div>
                   </td>
                   <td className="p-4 text-right">
-                    <button className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white transition">
-                      View Details
-                    </button>
+                    <span className="text-xs text-slate-400">Ready</span>
                   </td>
                 </tr>
               ))
