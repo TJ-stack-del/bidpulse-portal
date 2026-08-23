@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function Header() {
-  const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [userRole, setUserRole] = useState<string>('client');
@@ -28,10 +27,17 @@ export default function Header() {
   }, [pathname]);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    router.push('/login');
-    router.refresh();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      console.error(e);
+    }
+    // Clear local storage items manually to guarantee session wipe
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Force hard reload to login page to reset client memory state
+    window.location.href = '/login';
   };
 
   return (
