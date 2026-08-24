@@ -109,3 +109,38 @@ CREATE TABLE admin_pilot_logs (
     evidence_payload JSONB,
     created_at TIMESTAMPTZ DEFAULT now()
 );
+## 2. Pricing, Monetization Model & Commercial Strategy Analysis
+
+### Commercial Strategy & Market Positioning
+BidPulse targets small-to-medium government contractors (GovCon), capture leads, and trade subcontractors pursuing local, state, and federal bids. The pricing strategy balances transactional, low-barrier entry for single-bid responses with recurring software subscriptions for active pipeline capture.
+
+### Pricing Architecture & Tiered Structure
+- **Transactional Pilot / Single RFP ($495 One-Time):**
+  - 1 Full RFP Intake & Parsing
+  - Interactive Compliance Checklist
+  - Capability Statement Draft
+  - Compliance Matrix & Technical Narrative
+  - Final Package Export
+- **Active Contractor Growth Tier ($1,250 / month):**
+  - Up to 3 Full RFP Pipeline Runs / month
+  - Automated Opportunity Matching Feed
+  - Reusable Proposal Asset Library
+  - Priority Admin Quality Audit & Review
+- **Enterprise Capture Lead ($2,850 / month):**
+  - Unlimited Opportunity Shortlisting
+  - Up to 8 RFP Intake Runs / month
+  - Custom NAICS/Set-Aside Matching Rules
+  - Dedicated Proposal Reviewer Turnaround (24h)
+  - Custom Export Layouts & Audit Logs
+
+### Unit Economics (Single $495 Pipeline)
+- Gross Transaction Revenue: $495.00
+- Stripe Processing Fee (~2.9% + $0.30): -$14.65
+- LLM / Parsing Infrastructure Costs: -$12.50
+- Cloud Compute, Storage & PDF Generation: -$4.25
+- Quality Audit / Admin Allocation: -$45.00
+- **Net Contribution Margin Per Intake: $418.60 (84.5% Margin)**
+
+### Platform Monetization & GTM Mechanics
+- **Stripe Payment Gateway:** Integrated via Next.js Server Actions and Route Handlers (`/api/webhooks/stripe`).
+- **Transactional Webhook Pipeline:** Completion of a $495 checkout automatically provisions an intake slot, triggers `rfp_intakes` record creation, and transitions status to `draft`/`in_review`.
