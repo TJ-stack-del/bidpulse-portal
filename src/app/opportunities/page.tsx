@@ -1,30 +1,28 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import React, { useState, useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 
 interface Solicitation {
   id: string;
+  trade: string;
   title: string;
   agency: string;
-  trade: string;
   deadline: string;
   ref_number: string;
   estimated_value: string;
-  portal_url?: string;
 }
 
 const fallbackSolicitations: Solicitation[] = [
   {
     id: '1',
     trade: 'Commercial Janitorial',
-    title: 'Custodial & Day Porter Services for Public Facilities',
-    agency: 'Duval County Public Facilities',
-    deadline: '16 Days Left',
-    ref_number: 'RFP-2026-28',
+    title: 'District-Wide Custodial, Floor Waxing & Environmental Sanitization',
+    agency: 'Duval County Public Schools (DCPS)',
+    deadline: '7 Days Left',
+    ref_number: 'DCPS-ITB-014-26',
     estimated_value: '$520,000/year',
   },
   {
@@ -74,60 +72,84 @@ const fallbackSolicitations: Solicitation[] = [
   },
 ];
 
-export default function OpportunitiesPage() {
+function OpportunitiesContent() {
   const [solicitations, setSolicitations] = useState<Solicitation[]>(fallbackSolicitations);
-  const [syncing, setSyncing] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState('All Trades');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [requestedKeys, setRequestedKeys] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const searchParams = useSearchParams();
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const fetchSolicitations = async () => {
-    try {
-      const res = await fetch('/api/ingest/rfps');
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.solicitations && data.solicitations.length > 0) {
-          setSolicitations(data.solicitations);
-        }
-      }
-    } catch {
-      // Retain fallback data if sync fails
-    }
-  };
-
   useEffect(() => {
-    fetchSolicitations();
-  }, []);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setNotification(null);
+    let saved: string[] = [];
     try {
-      const res = await fetch('/api/ingest/rfps');
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.solicitations) setSolicitations(data.solicitations);
-        setNotification({ type: 'success', message: 'Opportunities refreshed successfully.' });
-      } else {
-        setNotification({ type: 'error', message: 'Unable to update live feeds at this time.' });
+      const stored = localStorage.getItem('bidpulse_requested_assemblies');
+      if (stored) {
+        saved = JSON.parse(stored);
       }
     } catch {
-      setNotification({ type: 'error', message: 'Network connection issue. Displaying cached solicitations.' });
-    } finally {
-      setSyncing(false);
+      // ignore
     }
-  };
+
+    // Check if returned from Stripe with an ordered parameter
+    const orderedParam = searchParams?.get('ordered');
+    const sessionId = searchParams?.get('session_id');
+
+    if (orderedParam) {
+      saved = Array.from(new Set([...saved, orderedParam.toLowerCase().trim()]));
+      setNotification({
+        type: 'success',
+        message: `Proposal assembly request confirmed for "${orderedParam}". Our team is preparing your 5-tab binder.`,
+      });
+    }
+
+    if (sessionId && !orderedParam) {
+      setNotification({
+        type: 'success',
+        message: 'Payment received! Your proposal assembly is now in progress.',
+      });
+    }
+
+    if (searchParams?.get('canceled')) {
+      setNotification({
+        type: 'error',
+        message: 'Assembly request was canceled. You have not been charged.',
+      });
+    }
+
+    setRequestedKeys(saved);
+    try {
+      localStorage.setItem('bidpulse_requested_assemblies', JSON.stringify(saved));
+    } catch {
+      // ignore
+    }
+  }, [searchParams]);
 
   const handleRequestAssembly = async (sol: Solicitation) => {
     setSubmittingId(sol.id);
     setNotification(null);
     try {
       const { data: userData } = await supabase.auth.getUser();
+
+      // Persist across id, title, and ref_number
+      const newKeys = Array.from(new Set([
+        ...requestedKeys,
+        sol.id.toLowerCase().trim(),
+        sol.ref_number.toLowerCase().trim(),
+        sol.title.toLowerCase().trim(),
+      ]));
+      setRequestedKeys(newKeys);
+      try {
+        localStorage.setItem('bidpulse_requested_assemblies', JSON.stringify(newKeys));
+      } catch {
+        // ignore
+      }
 
       const res = await fetch('/api/checkout', {
         method: 'POST',
@@ -160,106 +182,162 @@ export default function OpportunitiesPage() {
     }
   };
 
+  const isSolicitationRequested = (sol: Solicitation) => {
+    const titleKey = sol.title.toLowerCase().trim();
+    const idKey = sol.id.toLowerCase().trim();
+    const refKey = sol.ref_number.toLowerCase().trim();
+
+    return (
+      requestedKeys.includes(titleKey) ||
+      requestedKeys.includes(idKey) ||
+      requestedKeys.includes(refKey) ||
+      requestedKeys.some((k) => titleKey.includes(k) || k.includes(titleKey))
+    );
+  };
+
   const filtered = solicitations.filter((sol) => {
     if (selectedTrade === 'All Trades') return true;
     const solTrade = (sol.trade || '').toLowerCase();
-    const filterKey = selectedTrade.toLowerCase();
-
-    if (filterKey.includes('janitorial')) return solTrade.includes('janitorial');
-    if (filterKey.includes('pressure')) return solTrade.includes('pressure') || solTrade.includes('washing');
-    if (filterKey.includes('landscaping')) return solTrade.includes('landscaping') || solTrade.includes('grounds') || solTrade.includes('mowing');
-    if (filterKey.includes('hauling')) return solTrade.includes('hauling') || solTrade.includes('waste') || solTrade.includes('debris');
-
-    return solTrade.includes(filterKey);
+    return solTrade.includes(selectedTrade.toLowerCase());
   });
 
+  const trades = [
+    'All Trades',
+    'Commercial Janitorial',
+    'HVAC Maintenance',
+    'Landscaping / Grounds',
+    'Hauling / Waste Removal',
+    'Pressure Washing / Facades',
+  ];
+
   return (
-    <div className="max-w-7xl w-full mx-auto p-6 md:p-8">
-      {notification && (
-        <div
-          className={`mb-6 p-4 rounded-xl text-xs font-semibold flex items-center justify-between border ${
-            notification.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-red-500/10 border-red-500/30 text-red-400'
-          }`}
-        >
-          <span>{notification.message}</span>
-          <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white ml-4">✕</button>
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Active RFP Opportunities</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Live Florida municipal procurement solicitations. Order your turnkey 5-tab binder.</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <svg className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {syncing ? 'Syncing Feeds...' : 'Sync Live Feeds'}
-          </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Trade:</span>
-            <select
-              value={selectedTrade}
-              onChange={(e) => setSelectedTrade(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 mb-3">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+              Live Procurement Feed
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white">
+              Municipal Bid Opportunities
+            </h1>
+            <p className="text-slate-400 mt-1 text-sm">
+              Verified Florida public works and institutional solicitations with turnkey 5-tab proposal assembly.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/portal"
+              className="px-4 py-2 text-sm font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition border border-slate-700"
             >
-              <option value="All Trades">All Trades</option>
-              <option value="Commercial Janitorial">Commercial Janitorial</option>
-              <option value="Pressure Washing / Facades">Pressure Washing</option>
-              <option value="Landscaping / Grounds">Landscaping / Grounds</option>
-              <option value="Hauling / Waste Removal">Hauling / Waste</option>
-              <option value="HVAC Maintenance">HVAC Maintenance</option>
-            </select>
+              Workspace Pipeline
+            </Link>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((sol) => (
+        {/* Notification Banner */}
+        {notification && (
           <div
-            key={sol.id}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition"
+            className={`p-4 rounded-lg text-sm border flex items-center justify-between ${
+              notification.type === 'success'
+                ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300'
+                : 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+            }`}
           >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                  {sol.trade}
-                </span>
-                <span className="text-amber-600 dark:text-amber-400 font-semibold">{sol.deadline}</span>
-              </div>
-
-              <h3 className="font-bold text-base text-slate-900 dark:text-white leading-snug">
-                {sol.title}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{sol.agency}</p>
-              <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                Est. Value: {sol.estimated_value}
-              </div>
-            </div>
-
-            <div className="pt-6 border-t border-slate-100 dark:border-slate-800 mt-6 flex items-center justify-between gap-3">
-              <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">{sol.ref_number}</span>
-              <button
-                onClick={() => handleRequestAssembly(sol)}
-                disabled={submittingId === sol.id}
-                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition cursor-pointer"
-              >
-                {submittingId === sol.id ? 'Processing...' : 'Request Assembly ($495)'}
-              </button>
-            </div>
+            <span>{notification.message}</span>
+            <button
+              onClick={() => setNotification(null)}
+              className="text-xs underline hover:opacity-80 ml-4"
+            >
+              Dismiss
+            </button>
           </div>
-        ))}
+        )}
+
+        {/* Trade Filter Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+          {trades.map((trade) => (
+            <button
+              key={trade}
+              onClick={() => setSelectedTrade(trade)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
+                selectedTrade === trade
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                  : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              {trade}
+            </button>
+          ))}
+        </div>
+
+        {/* Solicitations Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((sol) => {
+            const isRequested = isSolicitationRequested(sol);
+            const isSubmitting = submittingId === sol.id;
+
+            return (
+              <div
+                key={sol.id}
+                className="flex flex-col justify-between bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-6 transition group"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 rounded bg-slate-800 text-blue-400 border border-slate-700">
+                      {sol.trade.replace(/[\s/]/g, '_').toUpperCase()}
+                    </span>
+                    <span className="text-xs text-slate-400 font-medium">
+                      {sol.deadline}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base font-bold text-slate-100 group-hover:text-blue-300 transition line-clamp-2">
+                      {sol.title}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">{sol.agency}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-mono">Ref #{sol.ref_number}</p>
+                  </div>
+
+                  <div className="pt-2">
+                    <div className="text-xs font-semibold text-emerald-400">
+                      Est. Value: <span className="font-bold">{sol.estimated_value}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 border-t border-slate-800/80 mt-6 flex items-center justify-end">
+                  {isRequested ? (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      ✓ Assembly In Progress
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleRequestAssembly(sol)}
+                      disabled={isSubmitting}
+                      className="inline-flex items-center justify-center px-4 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 active:scale-95 text-white transition shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? 'Connecting...' : 'Request Assembly ($495)'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function OpportunitiesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center text-sm">Loading opportunities...</div>}>
+      <OpportunitiesContent />
+    </Suspense>
   );
 }

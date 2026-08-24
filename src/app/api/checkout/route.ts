@@ -1,6 +1,33 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
+function resolveAppUrl(req: Request): string {
+  // 1. Check Codespaces environment variables
+  if (process.env.CODESPACE_NAME && process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN) {
+    return `https://${process.env.CODESPACE_NAME}-3000.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`;
+  }
+
+  // 2. Check forwarded proxy headers
+  const forwardedHost = req.headers.get('x-forwarded-host');
+  const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  // 3. Check Origin / Referer
+  const origin = req.headers.get('origin') || req.headers.get('referer');
+  if (origin) {
+    try {
+      return new URL(origin).origin;
+    } catch {
+      // ignore
+    }
+  }
+
+  // 4. Default fallback
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -14,9 +41,9 @@ export async function POST(req: Request) {
     }
 
     const secretKey = process.env.STRIPE_SECRET_KEY;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = resolveAppUrl(req);
 
-    console.log('[Checkout] Secret key present:', !!secretKey);
+    console.log('[Checkout] Resolved Redirect URL:', appUrl);
 
     if (secretKey) {
       const stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' as any });
@@ -57,7 +84,7 @@ export async function POST(req: Request) {
 
     // Fallback if no secret key is present
     return NextResponse.json({
-      url: `/dashboard/proposals?ordered=${encodeURIComponent(solicitationTitle)}&simulated=true`,
+      url: `${appUrl}/dashboard/proposals?ordered=${encodeURIComponent(solicitationTitle)}&simulated=true`,
       success: true,
     });
   } catch (err: any) {
