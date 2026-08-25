@@ -3,55 +3,66 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16' as any,
-});
-
-// Use service role for backend webhook ingestion to bypass RLS
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!stripeSecretKey || !webhookSecret) {
+    console.error('Missing Stripe server secrets');
+    return NextResponse.json({ error: 'Stripe configuration missing on server' }, { status: 500 });
+  }
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('Missing Supabase server credentials');
+    return NextResponse.json({ error: 'Database configuration missing on server' }, { status: 500 });
+  }
+
+  const stripe = new Stripe(stripeSecretKey, {
+    apiVersion: '2023-10-16' as any,
+  });
+
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
   const body = await req.text();
-  const headersList = await headers();
-  const signature = headersList.get('stripe-signature') as string;
+  const signature = (await headers()).get('stripe-signature');
+
+  if (!signature) {
+    return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
+  }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err: any) {
     console.error(`Webhook signature verification failed: ${err.message}`);
-    return NextResponse.json({ error: err.message }, { status: 400 });
+    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
+    const metadata = session.metadata || {};
 
-    const rfpIntakeId = session.metadata?.rfp_intake_id;
-    const tier = session.metadata?.tier;
+    const clientId = metadata.client_id || session.customer_email || 'client@bidpulse.local';
+    const tier = metadata.selected_tier || 'single_bid_pass';
+    const rfpIntakeId = metadata.rfp_intake_id;
 
-    if (rfpIntakeId) {
-      await supabaseAdmin
-        .from('rfp_intakes')
-        .update({
-          status: 'in_review',
-          tier: tier || 'single_bid_pass',
-          raw_payload: session,
-        })
-        .eq('id', rfpIntakeId);
-    } else {
-      await supabaseAdmin.from('rfp_intakes').insert({
-        status: 'in_review',
-        tier: tier || 'single_bid_pass',
-        raw_payload: session,
-      });
+    const { error: insertError } = await supabaseAdmin.from('rfp_intakes').insert({
+      id: rfpIntakeId || undefined,
+      client_email: clientId,
+      tier: tier,
+      status: 'in_review',
+      solicitation_title: session.amount_total === 49500 ? 'Single RFP Pilot Pass' : 'Turnkey Proposal Package',
+      created_at: new Date().toISOString(),
+    });
+
+    if (insertError) {
+      console.error('Failed to insert rfp_intake from webhook:', insertError);
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
   }
 
