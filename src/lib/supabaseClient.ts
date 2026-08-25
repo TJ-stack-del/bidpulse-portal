@@ -8,5 +8,12 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
 
-// Fallback singleton for legacy imports
+// Named export expected by auth and password reset pages
+export function getSupabase() {
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
+}
+
+// Fallback singleton instance
 export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+
+export default getSupabase;
