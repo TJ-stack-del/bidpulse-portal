@@ -1,14 +1,12 @@
 import { createBrowserClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
 
-// Singleton browser instance
-export const supabase = createClient();
-
-// Legacy alias helper
-export const getSupabase = () => supabase;
+// Fallback singleton for legacy imports
+export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
