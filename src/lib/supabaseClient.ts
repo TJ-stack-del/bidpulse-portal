@@ -1,28 +1,14 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-let clientInstance: SupabaseClient | null = null;
-
-export function getSupabase(): SupabaseClient {
-  if (clientInstance) return clientInstance;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xyzcompany.supabase.co';
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy';
-
-  clientInstance = createClient(url, key, {
-    auth: {
-      persistSession: typeof window !== 'undefined',
-      autoRefreshToken: typeof window !== 'undefined',
-    }
-  });
-
-  return clientInstance;
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 
-// Export a proxy so `supabase.from(...)` continues to work cleanly
-export const supabase = new Proxy({} as SupabaseClient, {
-  get: (_, prop) => {
-    const client = getSupabase();
-    const value = (client as any)[prop];
-    return typeof value === 'function' ? value.bind(client) : value;
-  }
-});
+// Singleton browser instance
+export const supabase = createClient();
+
+// Legacy alias helper
+export const getSupabase = () => supabase;

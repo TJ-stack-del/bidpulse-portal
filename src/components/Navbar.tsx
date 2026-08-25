@@ -1,161 +1,178 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
-import { useTheme } from './ThemeProvider';
+import { BidPulseLogo, BidPulseIcon, BPMonogram } from '@/components/brand/BidPulseLogo';
 
-const ADMIN_EMAILS = ['admin@bidpulse.com'];
+interface NavItem {
+  label: string;
+  href: string;
+  icon: string;
+  badge?: string;
+  group: 'pipeline' | 'profile';
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { label: 'Browse Solicitations', href: '/', icon: '🔍', group: 'pipeline' },
+  { label: 'My Proposal Binders', href: '/binders', icon: '📁', group: 'pipeline' },
+  { label: 'Coordinator Ingestion', href: '/portal/coordinator', icon: '📥', badge: 'Ops', group: 'pipeline' },
+  { label: 'Fulfillment Workspace', href: '/portal/proposals', icon: '⚡', badge: 'Ops', group: 'pipeline' },
+  { label: 'Company Profile & NAICS', href: '/profile', icon: '🏢', group: 'profile' },
+  { label: 'Past Performance Vault', href: '/profile/vault', icon: '🛡️', group: 'profile' },
+  { label: 'Billing & Subscriptions', href: '/profile/billing', icon: '💳', group: 'profile' },
+];
 
 export default function Navbar() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      setLoading(false);
-    };
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    window.location.href = '/login';
-  };
-
-  const isActive = (path: string) => pathname === path;
-  const isAdmin = user && ADMIN_EMAILS.includes(user.email);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
 
   return (
-    <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        
-        <div className="flex items-center gap-8">
-          {/* Brand Logo with Shield Icon */}
-          <Link className="flex items-center gap-2.5 h-8" href="/">
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-8 w-auto text-blue-500 shrink-0">
-              <path d="M50 8L88 22V50C88 74 50 92 50 92C50 92 12 74 12 50V22L50 8Z" stroke="#2563EB" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" className="stroke-blue-500 fill-blue-950/20"></path>
-              <path d="M20 50H36L44 32L54 68L64 42L72 50H80" stroke="#38BDF8" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"></path>
-            </svg>
-            <span className="font-extrabold tracking-tight text-xl text-slate-900 dark:text-white font-sans">
-              Bid<span className="text-blue-500">Pulse</span>
-            </span>
-          </Link>
-
-          <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
-            <Link
-              href="/opportunities"
-              className={`px-3 py-1.5 rounded-lg transition text-xs font-semibold ${
-                isActive('/opportunities')
-                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-900'
-              }`}
-            >
-              Browse RFPs
-            </Link>
-
-            {!loading && user && (
-              <Link
-                href="/dashboard/proposals"
-                className={`px-3 py-1.5 rounded-lg transition text-xs font-semibold ${
-                  isActive('/dashboard/proposals')
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-900'
-                }`}
-              >
-                My Proposal Binders
-              </Link>
-            )}
-
-            {!loading && isAdmin && (
-              <div className="flex items-center gap-1 ml-4 pl-4 border-l border-slate-200 dark:border-slate-800">
-                <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mr-1">
-                  Admin
-                </span>
-                <Link
-                  href="/admin/opportunities"
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                >
-                  RFPs
-                </Link>
-                <Link
-                  href="/admin/fulfillment"
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                >
-                  Fulfillment
-                </Link>
-                <Link
-                  href="/admin/users"
-                  className="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                >
-                  Users
-                </Link>
-              </div>
-            )}
-          </nav>
-        </div>
-
-        {/* Right Section: Theme Toggle & Auth */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleTheme}
-            aria-label="Toggle Theme"
-            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer border border-slate-200 dark:border-slate-800"
-          >
-            {theme === 'dark' ? (
-              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
-          </button>
-
-          {!loading && user ? (
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1 rounded-full text-xs text-slate-700 dark:text-slate-300">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="font-mono text-[11px] truncate max-w-[160px]">{user.email}</span>
-              </div>
+    <>
+      {/* Top Header Bar */}
+      <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#060b18]/90 backdrop-blur-md px-4 sm:px-8">
+        <div className="w-full h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {isLoggedIn && (
               <button
-                onClick={handleSignOut}
-                className="bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700/80 text-xs font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-slate-200 hover:text-white bg-[#0F172A] border border-slate-800 hover:border-[#2563EB]/50 transition flex items-center gap-2 text-xs font-medium"
               >
-                Sign Out
+                <span className="text-sm leading-none">☰</span>
+                <span>Workspace</span>
               </button>
-            </div>
-          ) : !loading && !user ? (
-            <Link
-              href="/login"
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md shadow-blue-600/20 transition"
+            )}
+
+            <Link href="/" className="flex items-center">
+              <BidPulseLogo size={28} textSize="text-xl" />
+            </Link>
+          </div>
+
+          {!isLoggedIn && (
+            <button
+              type="button"
+              onClick={() => setIsLoggedIn(true)}
+              className="text-xs px-4 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-500 text-white font-semibold transition shadow-md shadow-blue-600/20"
             >
               Sign In
-            </Link>
-          ) : (
-            <div className="h-7 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse"></div>
+            </button>
           )}
         </div>
+      </header>
 
-      </div>
-    </header>
+      {/* Slide-out Drawer */}
+      {drawerOpen && isLoggedIn && (
+        <div
+          onClick={() => setDrawerOpen(false)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity"
+        />
+      )}
+
+      <aside
+        className={`fixed top-0 left-0 z-50 h-screen w-72 bg-[#070d1d] border-r border-slate-800 shadow-2xl transition-transform duration-300 ease-in-out flex flex-col justify-between ${
+          drawerOpen && isLoggedIn ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BPMonogram size={32} />
+            <div className="flex flex-col">
+              <span className="font-bold text-slate-100 text-xs tracking-tight">BidPulse Suite</span>
+              <span className="text-[10px] text-[#2563EB] font-mono">Precision Bidding</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(false)}
+            className="h-7 w-7 rounded-lg text-slate-400 hover:text-white bg-slate-900 border border-slate-800 flex items-center justify-center text-xs"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          <div className="space-y-1">
+            <span className="px-3 text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+              Workflow & Fulfillment
+            </span>
+            {NAV_ITEMS.filter((i) => i.group === 'pipeline').map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setDrawerOpen(false)}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                    isActive
+                      ? 'bg-[#2563EB]/10 text-[#2563EB] border border-[#2563EB]/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <span className="text-sm shrink-0">{item.icon}</span>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#0F172A] text-[#2563EB] border border-[#2563EB]/30">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="space-y-1">
+            <span className="px-3 text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+              Company Assets & Tools
+            </span>
+            {NAV_ITEMS.filter((i) => i.group === 'profile').map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setDrawerOpen(false)}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                    isActive
+                      ? 'bg-[#2563EB]/10 text-[#2563EB] border border-[#2563EB]/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <span className="text-sm shrink-0">{item.icon}</span>
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 space-y-2">
+          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-[#0F172A] border border-slate-800">
+            <div className="h-7 w-7 rounded-full bg-[#2563EB]/20 text-[#2563EB] border border-[#2563EB]/30 flex items-center justify-center text-xs font-bold shrink-0">
+              U
+            </div>
+            <div className="flex flex-col truncate">
+              <span className="text-xs font-medium text-slate-200 truncate">test2@bidpulse.local</span>
+              <span className="text-[10px] text-[#059669] flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#059669]" /> Compliance Verified
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsLoggedIn(false);
+              setDrawerOpen(false);
+            }}
+            className="w-full py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-900 rounded-lg border border-slate-800/60 transition"
+          >
+            Sign Out
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }

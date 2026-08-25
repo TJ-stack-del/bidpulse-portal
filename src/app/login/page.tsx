@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
+import { loginAction, signUpAction } from '@/app/actions/auth';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,8 +10,6 @@ function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
-  const router = useRouter();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,31 +17,27 @@ function LoginPage() {
     setError(null);
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      // 1. Package the React state into FormData for the Server Action
+      const formData = new FormData();
+      formData.append('email', email);
+      formData.append('password', password);
 
+      // 2. Execute the correct Server Action based on the toggle state
+      let result;
       if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpError) throw signUpError;
-        await supabase.auth.signInWithPassword({ email, password });
+        result = await signUpAction(formData);
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
+        result = await loginAction(formData);
       }
 
-      router.push('/');
-      router.refresh();
+      // 3. The Server Action handles the redirect on success. 
+      // If we reach this line, an error occurred in the database.
+      if (result?.error) {
+        setError(result.error);
+        setLoading(false);
+      }
     } catch (err: any) {
       setError(err.message || 'An error occurred during authentication.');
-    } finally {
       setLoading(false);
     }
   };

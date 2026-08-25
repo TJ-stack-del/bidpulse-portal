@@ -1,162 +1,188 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { getCurrentUser, signOutUser } from "../auth";
-import { User } from "@supabase/supabase-js";
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
-export default function Navbar() {
+interface NavItem {
+  label: string;
+  href: string;
+  icon: string;
+  badge?: string;
+  section: 'workflow' | 'profile';
+}
+
+const NAV_ITEMS: NavItem[] = [
+  // Core Workflow
+  { label: 'Browse RFPs', href: '/', icon: '🔍', section: 'workflow' },
+  { label: 'My Proposal Binders', href: '/binders', icon: '📁', section: 'workflow' },
+  { label: 'Coordinator Intake', href: '/portal/coordinator', icon: '📥', badge: 'Ops', section: 'workflow' },
+  { label: 'Fulfillment Workspace', href: '/portal/proposals', icon: '⚡', badge: 'Ops', section: 'workflow' },
+
+  // Profile & Workspace Tools
+  { label: 'Company Profile & NAICS', href: '/profile', icon: '🏢', section: 'profile' },
+  { label: 'Past Performance Vault', href: '/profile/vault', icon: '🛡️', section: 'profile' },
+  { label: 'Billing & Plan Access', href: '/profile/billing', icon: '💳', section: 'profile' },
+];
+
+export default function AppSidebar() {
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
+  
+  // Simulated authenticated user check (replace with your supabase session hook if dynamic)
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
+  // Auto-collapse on small screens
   useEffect(() => {
-    getCurrentUser().then(setUser);
-  }, [pathname]);
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsOpen(false);
+      } else {
+        setIsOpen(true);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  const handleSignOut = async () => {
-    await signOutUser();
-    setUser(null);
-    window.location.href = "/login";
-  };
-
-  const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/search", label: "🔍 Live Search" },
-    { href: "/portal", label: "Workspace" },
-    { href: "/fit-score", label: "Fit Evaluator" },
-    { href: "/settings", label: "⚙️ Criteria" },
-  ];
-
-  // Dynamic permission: Only show Admin if authenticated
-  if (user) {
-    navLinks.push({ href: "/admin", label: "Admin Console" });
-  }
+  if (!isAuthenticated) return null;
 
   return (
-    <header className="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Brand Logo */}
-          <Link href="/" className="flex items-center gap-3 hover:opacity-85 transition-opacity">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-lg shadow-sm">
-              B
-            </div>
-            <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white">
-              BidPulse
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+        />
+      )}
+
+      {/* Slide-out Sidebar */}
+      <aside
+        className={`fixed top-0 left-0 z-50 h-screen bg-[#070d1d] border-r border-slate-800 transition-all duration-300 ease-in-out flex flex-col justify-between ${
+          isOpen ? 'w-64' : 'w-20'
+        }`}
+      >
+        {/* Brand & Toggle Header */}
+        <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3 overflow-hidden">
+            <span className="h-9 w-9 shrink-0 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold">
+              ⚡
             </span>
+            {isOpen && (
+              <div className="flex flex-col">
+                <span className="font-bold text-slate-100 text-sm tracking-tight">BidPulse</span>
+                <span className="text-[10px] text-cyan-400 font-mono">Workspace Suite</span>
+              </div>
+            )}
           </Link>
 
-          {/* Desktop Links */}
-          <div className="hidden md:flex items-center gap-1.5">
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href;
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition hidden lg:flex items-center justify-center"
+            title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {isOpen ? '◀' : '▶'}
+          </button>
+        </div>
+
+        {/* Navigation Sections */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          {/* Main Pipeline Navigation */}
+          <div className="space-y-1">
+            {isOpen && (
+              <span className="px-3 text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+                Pipeline
+              </span>
+            )}
+            {NAV_ITEMS.filter((i) => i.section === 'workflow').map((item) => {
+              const isActive = pathname === item.href;
               return (
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
                     isActive
-                      ? "bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 font-bold"
-                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
                   }`}
+                  title={!isOpen ? item.label : undefined}
                 >
-                  {link.label}
+                  <span className="text-base shrink-0">{item.icon}</span>
+                  {isOpen && (
+                    <div className="flex items-center justify-between w-full truncate">
+                      <span className="truncate">{item.label}</span>
+                      {item.badge && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </Link>
               );
             })}
           </div>
 
-          {/* Right Controls */}
-          <div className="hidden md:flex items-center gap-3">
-            <Link
-              href="/intake"
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
-            >
-              + New Intake
-            </Link>
+          {/* Profile & Business Tools */}
+          <div className="space-y-1">
+            {isOpen && (
+              <span className="px-3 text-[10px] uppercase font-semibold text-slate-500 tracking-wider">
+                Profile & Assets
+              </span>
+            )}
+            {NAV_ITEMS.filter((i) => i.section === 'profile').map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                    isActive
+                      ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                  }`}
+                  title={!isOpen ? item.label : undefined}
+                >
+                  <span className="text-base shrink-0">{item.icon}</span>
+                  {isOpen && <span className="truncate">{item.label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
 
-            {user ? (
-              <button
-                onClick={handleSignOut}
-                className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
-              >
-                Sign Out ({user.email?.split("@")[0]})
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                className="px-3.5 py-1.5 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
-              >
-                Sign In
-              </Link>
+        {/* User Status & Sign Out Footer */}
+        <div className="p-3 border-t border-slate-800/80 bg-slate-950/40">
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
+            <div className="h-7 w-7 shrink-0 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center text-xs font-bold">
+              U
+            </div>
+            {isOpen && (
+              <div className="flex flex-col truncate flex-1">
+                <span className="text-xs font-medium text-slate-200 truncate">
+                  test2@bidpulse.local
+                </span>
+                <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Active Session
+                </span>
+              </div>
             )}
           </div>
 
-          {/* Mobile Button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              aria-label="Toggle navigation"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsAuthenticated(false)}
+            className={`w-full mt-2 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent transition`}
+            title={!isOpen ? 'Sign Out' : undefined}
+          >
+            <span>🚪</span>
+            {isOpen && <span>Sign Out</span>}
+          </button>
         </div>
-      </div>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pt-2 pb-4 space-y-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                pathname === link.href
-                  ? "bg-blue-50 dark:bg-blue-950 text-blue-600 font-bold"
-                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-          <div className="pt-2 flex flex-col gap-2">
-            <Link
-              href="/intake"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2 bg-blue-600 text-white font-bold rounded-lg text-xs"
-            >
-              + New Intake
-            </Link>
-            {user ? (
-              <button
-                onClick={handleSignOut}
-                className="w-full text-center py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold"
-              >
-                Sign Out ({user.email?.split("@")[0]})
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full text-center py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold"
-              >
-                Sign In
-              </Link>
-            )}
-          </div>
-        </div>
-      )}
-    </header>
+      </aside>
+    </>
   );
 }

@@ -1,0 +1,9 @@
+# Query: portal/dashboard
+# ContextLines: 1
+
+1 result - 1 file
+
+src/app/portal/intake/page.tsx:
+  36        // Redirect to the dashboard upon successful database insertion
+  37:       router.push('/portal/coordinator');
+  38      } catch (err: any) {
