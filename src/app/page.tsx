@@ -79,7 +79,7 @@ export default function HomePage() {
             </h1>
 
             <p className="text-slate-400 text-base sm:text-lg leading-relaxed">
-              Stop scrolling endless lead alerts. <strong className="text-white">BidPulse</strong> is your on-demand proposal department for Duval County and Florida municipal contracts: choose your solicitation, and we deliver a completed, agency-compliant binder in 10 to 14 business days.
+              Stop scrolling endless lead alerts. <strong className="text-white">BidPulse</strong> is your on-demand proposal department for Duval County and Florida municipal contracts: choose your job, and we deliver a completed, submission-ready bid package in 10 to 14 business days.
             </p>
 
             {/* 5-Tab Precision Bar Callout Card */}
@@ -108,13 +108,13 @@ export default function HomePage() {
                 href="/opportunities"
                 className="w-full sm:w-auto bg-[#2563EB] hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-xl transition text-center text-sm shadow-lg shadow-blue-600/30"
               >
-                Explore Active RFPs &rarr;
+                Explore Active Jobs &rarr;
               </Link>
               <Link 
                 href="/binders"
                 className="w-full sm:w-auto bg-[#0F172A] hover:bg-slate-800 text-slate-200 border border-slate-800 font-bold px-8 py-4 rounded-xl transition text-center text-sm"
               >
-                View Proposal Binders
+                View My Bids
               </Link>
             </div>
           </div>
@@ -156,7 +156,7 @@ export default function HomePage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-xs font-mono text-slate-400 uppercase font-bold tracking-wider">
-                  2. Open Florida Opportunities ({selectedTrade})
+                  2. OPEN FLORIDA JOBS ({selectedTrade})
                 </div>
                 <span className="text-[10px] text-[#2563EB] font-mono">
                   {filteredOpportunities.length} match(es)
@@ -182,7 +182,7 @@ export default function HomePage() {
                     href="/opportunities"
                     className="w-full sm:w-auto bg-[#2563EB]/10 hover:bg-[#2563EB] text-[#2563EB] hover:text-white border border-[#2563EB]/30 font-semibold px-4 py-2 rounded-xl text-xs transition text-center shrink-0"
                   >
-                    Request Proposal Binder &rarr;
+                    Start Bid Package &rarr;
                   </Link>
                 </div>
               ))}
