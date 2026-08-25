@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BidPulseIcon, FiveTabPrecisionBar } from '@/components/brand/BidPulseLogo';
+import { BidPulseIcon } from '@/components/brand/BidPulseLogo';
 
 const opportunitiesData = [
   {
@@ -84,21 +84,38 @@ export default function HomePage() {
 
             {/* 5-Tab Precision Bar Callout Card */}
             <div className="bg-[#0F172A] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-              <FiveTabPrecisionBar activeTab="Transmittal" />
+              {/* 5-Tab Navigation Bar */}
+              <div className="grid grid-cols-5 text-center text-[11px] font-semibold tracking-wide border-b border-slate-800 bg-slate-950/60">
+                <div className="py-2.5 px-1 bg-slate-900/80 text-slate-300 border-r border-slate-800">Cover Letter</div>
+                <div className="py-2.5 px-1 bg-slate-900/80 text-slate-300 border-r border-slate-800">The Work</div>
+                <div className="py-2.5 px-1 bg-[#2563EB] text-white font-bold border-r border-slate-800">The Crew</div>
+                <div className="py-2.5 px-1 bg-emerald-600 text-white font-bold border-r border-slate-800">Pricing</div>
+                <div className="py-2.5 px-1 bg-teal-500 text-slate-950 font-bold">Legal</div>
+              </div>
+
               <div className="p-5 space-y-3">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">
                     Signature Standard Delivery Package
                   </span>
-                  <span className="text-[#059669] font-bold text-[11px] bg-[#059669]/10 px-2 py-0.5 rounded border border-[#059669]/20">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     Eligible to Bid
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                  <div>✓ Transmittal & Exec Letter</div>
-                  <div>✓ Scope & Methodology</div>
-                  <div>✓ Staffing & Key Personnel</div>
-                  <div>✓ Unit Price Cost Matrix</div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">✓</span> Cover Letter & Summary
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">✓</span> The Work & Methodology
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">✓</span> The Crew & Key Personnel
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-emerald-400 font-bold">✓</span> Pricing & Cost Matrix
+                  </div>
                 </div>
               </div>
             </div>
@@ -176,7 +193,7 @@ export default function HomePage() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-400">{opp.agency}</p>
-                    <div className="text-xs font-mono text-[#059669] font-bold pt-1">{opp.estValue}</div>
+                    <div className="text-xs font-mono text-emerald-400 font-bold pt-1">{opp.estValue}</div>
                   </div>
                   <Link
                     href="/opportunities"
