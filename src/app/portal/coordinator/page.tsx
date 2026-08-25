@@ -26,7 +26,7 @@ export default async function CoordinatorPage() {
       }
     }
   } catch (err) {
-    console.error('Failed to load coordinator queue:', err);
+    console.error('Failed to load job queue:', err);
   }
 
   return (
@@ -34,19 +34,19 @@ export default async function CoordinatorPage() {
       <div className="max-w-7xl mx-auto space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#2563EB]/10 text-[#2563EB] text-[10px] font-mono uppercase font-bold mb-2">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#2563EB]/10 text-blue-400 text-[10px] font-mono uppercase font-bold mb-2">
               Operations Control
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">Coordinator Ingestion Queue</h1>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">Job & Upload Queue</h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Review incoming client intakes, verify document attachments, and assign to writer fulfillment.
+              Review new client uploads, verify bid specifications, and assign team writers.
             </p>
           </div>
           <Link
             href="/portal/proposals"
             className="px-4 py-2 rounded-xl bg-[#0F172A] hover:bg-slate-800 border border-slate-800 text-xs font-semibold transition"
           >
-            Open Fulfillment Workspace &rarr;
+            Open Bid Workspace &rarr;
           </Link>
         </div>
 
@@ -54,12 +54,12 @@ export default async function CoordinatorPage() {
           <div className="bg-[#0F172A] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-900/80 text-slate-400 uppercase font-mono text-[10px] border-b border-slate-800">
+                <thead className="bg-slate-900/80 text-slate-300 uppercase font-mono text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="px-6 py-4">Client / Ingestion ID</th>
-                    <th className="px-6 py-4">Solicitation Target</th>
-                    <th className="px-6 py-4">Package Tier</th>
-                    <th className="px-6 py-4">Intake Status</th>
+                    <th className="px-6 py-4">Client / Upload ID</th>
+                    <th className="px-6 py-4">Target Job</th>
+                    <th className="px-6 py-4">Package</th>
+                    <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -68,22 +68,24 @@ export default async function CoordinatorPage() {
                     <tr key={item.id} className="hover:bg-slate-900/40 transition">
                       <td className="px-6 py-4">
                         <div className="font-semibold text-white">{item.client_email}</div>
-                        <div className="font-mono text-[10px] text-slate-500 truncate max-w-[140px]">{item.id}</div>
+                        <div className="font-mono text-[10px] text-slate-400 truncate max-w-[140px]">{item.id}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-medium text-slate-200">{item.solicitation_title || 'Pending Ingestion'}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">
+                        <div className="font-medium text-slate-100">{item.solicitation_title || 'New Job Upload'}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">
                           {item.created_at ? new Date(item.created_at).toLocaleString() : 'Recent'}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="font-mono uppercase text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                        <span className="font-mono uppercase text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
                           {item.tier || 'Standard'}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                          {item.status || 'in_review'}
+                        {/* High-Contrast Status Pill */}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/90 text-amber-300 border border-amber-400/40">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          {item.status === 'in_review' ? 'In Review' : (item.status || 'Active')}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -106,9 +108,9 @@ export default async function CoordinatorPage() {
               📥
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-bold text-white">Ingestion Queue is Empty</h3>
+              <h3 className="text-base font-bold text-white">Upload Queue is Empty</h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
-                No paid proposal requests are currently awaiting coordinator assignment.
+                No new client bid requests are currently awaiting assignment.
               </p>
             </div>
           </div>
